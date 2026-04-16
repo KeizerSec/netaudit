@@ -43,6 +43,13 @@ _GRADE_COLORS = {
     "F": colors.HexColor("#DC2626"),
 }
 
+_ALERT_COLORS = {
+    "critical": colors.HexColor("#DC2626"),
+    "warning":  colors.HexColor("#F97316"),
+    "neutral":  colors.HexColor("#64748B"),
+    "positive": colors.HexColor("#22C55E"),
+}
+
 
 def _style_for_risk(risk: str) -> colors.Color:
     return _RISK_COLORS.get((risk or "").upper(), colors.HexColor("#64748B"))
@@ -250,6 +257,67 @@ def _build_context_section(data: dict, styles) -> list:
     return flow
 
 
+def _build_baseline_section(data: dict, styles) -> list:
+    bsn = data.get("baseline") or {}
+    if not bsn or not bsn.get("has_previous"):
+        return []
+
+    h2 = ParagraphStyle(
+        "H2", parent=styles["Heading2"], fontSize=14,
+        textColor=colors.HexColor("#0F172A"), spaceBefore=12, spaceAfter=6,
+    )
+    summary = bsn.get("summary") or {}
+    prev_date = bsn.get("previous_date") or "?"
+
+    flow = [
+        Paragraph("Dérive vs scan précédent", h2),
+        Paragraph(
+            f"Comparaison avec le scan du <b>{prev_date}</b> &nbsp;•&nbsp; "
+            f'<font color="{_ALERT_COLORS["critical"].hexval()}"><b>{summary.get("critical", 0)}</b> critique(s)</font> &nbsp;•&nbsp; '
+            f'<font color="{_ALERT_COLORS["warning"].hexval()}"><b>{summary.get("warning", 0)}</b> warning(s)</font> &nbsp;•&nbsp; '
+            f'<b>{summary.get("neutral", 0)}</b> neutre(s) &nbsp;•&nbsp; '
+            f'<font color="{_ALERT_COLORS["positive"].hexval()}"><b>{summary.get("positive", 0)}</b> positive(s)</font>',
+            styles["Normal"],
+        ),
+        Spacer(1, 6),
+    ]
+
+    alerts = bsn.get("alerts") or []
+    if not alerts:
+        flow.append(Paragraph("<i>Aucune dérive détectée.</i>", styles["Normal"]))
+        flow.append(Spacer(1, 8))
+        return flow
+
+    cell = ParagraphStyle("CellBsn", parent=styles["Normal"], fontSize=8, leading=10)
+    rows = [["Niveau", "Changement", "Évidence"]]
+    for a in alerts:
+        level = (a.get("level") or "neutral").lower()
+        lvl_color = _ALERT_COLORS.get(level, colors.HexColor("#64748B")).hexval()
+        rows.append([
+            Paragraph(f'<font color="{lvl_color}"><b>{level.upper()}</b></font>', cell),
+            Paragraph(f"<b>{a.get('title', '')}</b><br/>{a.get('description', '')}", cell),
+            Paragraph(a.get("evidence", "") or "—", cell),
+        ])
+    tbl = Table(rows, colWidths=[22 * mm, 85 * mm, 58 * mm], repeatRows=1)
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND",     (0, 0), (-1, 0), colors.HexColor("#1E293B")),
+        ("TEXTCOLOR",      (0, 0), (-1, 0), colors.white),
+        ("FONTNAME",       (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE",       (0, 0), (-1, -1), 9),
+        ("ALIGN",          (0, 0), (-1, -1), "LEFT"),
+        ("VALIGN",         (0, 0), (-1, -1), "TOP"),
+        ("GRID",           (0, 0), (-1, -1), 0.3, colors.HexColor("#CBD5E1")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+        ("LEFTPADDING",    (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING",   (0, 0), (-1, -1), 5),
+        ("TOPPADDING",     (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING",  (0, 0), (-1, -1), 4),
+    ]))
+    flow.append(tbl)
+    flow.append(Spacer(1, 6))
+    return flow
+
+
 def _score_color(score: float) -> colors.Color:
     try:
         s = float(score)
@@ -283,6 +351,7 @@ def render_pdf(data: dict) -> bytes:
 
     story: list[Any] = []
     story.extend(_build_header(data, styles))
+    story.extend(_build_baseline_section(data, styles))
     story.extend(_build_context_section(data, styles))
     story.extend(_build_attack_summary(data, styles))
     story.extend(_build_ports_table(data, styles))

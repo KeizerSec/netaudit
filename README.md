@@ -7,7 +7,7 @@
 ![MITRE ATT&CK](https://img.shields.io/badge/MITRE_ATT%26CK-Correlation-E8001D?style=for-the-badge&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)
 
-**Scanner de vulnérabilités réseau avec corrélation MITRE ATT&CK, priorisation EPSS + CISA KEV et détection contextuelle.** Donnez une IP, recevez un rapport structuré — ports ouverts, CVEs détectées, techniques d'attaque ATT&CK associées, chemin d'attaque ordonné selon le kill chain, **priorités d'action basées sur exploitation réelle** (présence dans le catalogue CISA KEV, score probabiliste FIRST EPSS, flag ransomware), **classification automatique du rôle de l'hôte + analyse de posture** (12 règles anti-pattern, score 0–100, grade A–F), niveau de risque global, priorités de détection SIEM. Trois formats de sortie (HTML interactif, JSON, PDF A4) et une API REST protégée par clé.
+**Scanner de vulnérabilités réseau avec corrélation MITRE ATT&CK, priorisation EPSS + CISA KEV, détection contextuelle et baseline historique.** Donnez une IP, recevez un rapport structuré — ports ouverts, CVEs détectées, techniques d'attaque ATT&CK associées, chemin d'attaque ordonné selon le kill chain, **priorités d'action basées sur exploitation réelle** (présence dans le catalogue CISA KEV, score probabiliste FIRST EPSS, flag ransomware), **classification automatique du rôle de l'hôte + analyse de posture** (12 règles anti-pattern, score 0–100, grade A–F), **détection de dérive vs scan précédent** (nouveaux ports, CVEs apparues, escalades KEV, régressions de version, changement de posture), niveau de risque global, priorités de détection SIEM. Trois formats de sortie (HTML interactif, JSON, PDF A4) et une API REST protégée par clé.
 
 > **Usage légal uniquement.** Ne scannez que des hôtes sur lesquels vous avez une autorisation explicite.
 
@@ -64,7 +64,19 @@ Vous donnez une IP  →  NetAudit lance Nmap + Vulners  →  Vous obtenez :
   • Score de posture 0–100 → grade A/B/C/D/F, comparable dans le temps
   • 100 % local — aucune dépendance réseau, déterministe
 
-  Couche 5 — Rapport & exports
+  Couche 5 — Baseline historique & détection de dérive
+  • Diff automatique vs scan précédent de la même IP (SQLite local)
+  • Alertes typées : port apparu, CVE ajoutée, escalade KEV, version changée,
+    finding nouveau, chute de posture, changement de rôle, remédiations
+  • Niveau d'alerte : critical / warning / neutral / positive
+  • Port DB ou admin ouvert → critical · CVE basculée dans KEV → critical ·
+    chute posture ≥ 20 pts → critical · régression de version → warning ·
+    port fermé / CVE patchée / finding résolu / posture en hausse → positive
+  • Bannière de dérive en tête du rapport, section détaillée avec evidence
+  • Premier scan → message explicite, activation automatique dès le 2ᵉ passage
+  • Baseline embarqué dans chaque scan historique (pas de recalcul)
+
+  Couche 6 — Rapport & exports
   • Rapport HTML dark-mode : donut CVSS, kill chain cliquable, filtre ports,
     meta-cards Rôle + Posture (grade + jauge), bloc Top priorités d'action,
     section Posture & recommandations avec findings colorisés par sévérité
@@ -75,7 +87,7 @@ Vous donnez une IP  →  NetAudit lance Nmap + Vulners  →  Vous obtenez :
   • Bouton « Copier en Markdown » pour ticket / PR / rapport d'incident
     (inclut priorités + findings posture + reco)
 
-  Couche 6 — Historique & observabilité
+  Couche 7 — Historique & observabilité
   • Persistance SQLite — chaque scan survit au redémarrage
   • Endpoints /history et /history/<ip> pour suivi de tendances
   • /version — traçabilité de l'image déployée (semver + hash commit)
@@ -220,6 +232,32 @@ curl http://localhost:5000/scan/192.168.1.1 \
       }
     ]
   },
+  "baseline": {
+    "has_previous": true,
+    "previous_date": "2026-04-15 10:00:00 UTC",
+    "previous_id": 41,
+    "summary": { "critical": 1, "warning": 1, "neutral": 0, "positive": 1, "total": 3, "has_drift": true },
+    "alerts": [
+      {
+        "level": "critical", "type": "kev_escalation",
+        "title": "Escalade KEV : CVE-2021-28041 désormais activement exploitée",
+        "description": "Cette CVE était déjà présente mais sans preuve d'exploitation…",
+        "evidence": "CVE CVE-2021-28041 · port 22"
+      },
+      {
+        "level": "warning", "type": "version_change",
+        "title": "Version modifiée sur 22/ssh",
+        "description": "La version du service a changé depuis le dernier scan…",
+        "evidence": "OpenSSH 8.9p1 → OpenSSH 7.6p1 Ubuntu"
+      },
+      {
+        "level": "positive", "type": "port_removed",
+        "title": "Port fermé : 23/telnet",
+        "description": "Réduction de surface — ce service n'est plus exposé.",
+        "evidence": "23/telnet"
+      }
+    ]
+  },
   "rapport_html": "/rapport/192.168.1.1"
 }
 ```
@@ -237,7 +275,7 @@ curl http://localhost:5000/rapport/192.168.1.1?format=json
 curl -OJ http://localhost:5000/rapport/192.168.1.1?format=pdf
 ```
 
-Le rapport HTML affiche : meta-cards synthétiques (IP, date, ports, donut CVSS, rôle inféré, priorité max KEV/ransomware, grade de posture + jauge 0–100), bloc « Top priorités d'action » basé sur le score combiné CVSS + KEV + EPSS, section « Posture & recommandations » avec findings colorisés par sévérité (titre + description + reco concrète + evidence), badges KEV / RANSOM / priorité et score EPSS par CVE dans le tableau des ports, kill chain MITRE ATT&CK cliquable (chaque phase active scroll vers sa fiche), fiches techniques colorisées par confiance avec détection et mitigations, priorités de détection SIEM, filtre de recherche sur les ports, boutons d'export (JSON / PDF / Markdown presse-papier), styles d'impression dédiés.
+Le rapport HTML affiche : meta-cards synthétiques (IP, date, ports, donut CVSS, rôle inféré, priorité max KEV/ransomware, grade de posture + jauge 0–100, **synthèse de dérive vs scan précédent**), bloc « Top priorités d'action » basé sur le score combiné CVSS + KEV + EPSS, **section « Dérive historique »** avec bannière colorée critical/warning/clean et cartes d'alertes typées (port apparu, CVE ajoutée, escalade KEV, version changée, finding nouveau, posture en chute, etc.), section « Posture & recommandations » avec findings colorisés par sévérité (titre + description + reco concrète + evidence), badges KEV / RANSOM / priorité et score EPSS par CVE dans le tableau des ports, kill chain MITRE ATT&CK cliquable (chaque phase active scroll vers sa fiche), fiches techniques colorisées par confiance avec détection et mitigations, priorités de détection SIEM, filtre de recherche sur les ports, boutons d'export (JSON / PDF / Markdown presse-papier), styles d'impression dédiés.
 
 ### Consulter l'historique
 
@@ -256,7 +294,7 @@ curl http://localhost:5000/history/192.168.1.1
 
 ```bash
 curl http://localhost:5000/version
-# → {"name": "NetAudit", "version": "2.3.0", "commit": "0403e03"}
+# → {"name": "NetAudit", "version": "2.4.0", "commit": "0403e03"}
 ```
 
 ---
@@ -348,17 +386,30 @@ cp .env.example .env
 - Score de posture 0–100 (100 − pénalités), grade A (≥ 90) / B (≥ 75) / C (≥ 55) / D (≥ 35) / F
 - 100 % local, déterministe — scores comparables entre scans
 
+**Baseline historique & détection de dérive**
+- Chaque scan se compare automatiquement au précédent scan de la même IP (via SQLite local)
+- Alertes typées et niveau calibré :
+  - **critical** — port DB/admin qui apparaît, CVE KEV/ransomware ajoutée, escalade KEV d'une CVE existante, finding CRITICAL nouveau, chute de posture ≥ 20 pts
+  - **warning** — autres ports ajoutés, CVE HIGH (CVSS ≥ 7) ajoutée, finding HIGH nouveau, régression de version sur port sensible, chute posture 10–19 pts, changement de rôle
+  - **neutral** — CVE MEDIUM/LOW ajoutée, finding MEDIUM/LOW nouveau, bump de version mineur
+  - **positive** — ports fermés, CVEs patchées, findings résolus, posture en hausse ≥ 5 pts
+- Escalade KEV détectée explicitement — une CVE présente dans les deux scans mais qui vient de basculer dans CISA KEV est traitée comme critique
+- Baseline embarqué dans la data persistée → pas de recalcul, accessible via `/history/<ip>` ou `/rapport/<ip>?format=json`
+- Premier scan → état explicite « premier scan », détection active dès le 2ᵉ passage
+- 100 % local, déterministe — aucune dépendance réseau
+
 **Rapport & UX**
 - Rapport HTML dark-mode avec donut SVG de répartition des sévérités CVSS
-- Meta-cards synthétiques : IP, date, ports, vulnérabilités, **rôle détecté + confiance**, **priorité max + KEV/ransomware count**, **grade de posture (A–F) + jauge 0–100**
+- Meta-cards synthétiques : IP, date, ports, vulnérabilités, **rôle détecté + confiance**, **priorité max + KEV/ransomware count**, **grade de posture (A–F) + jauge 0–100**, **synthèse de dérive vs scan précédent** (critique/warning/stable)
 - Bloc « Top priorités d'action » en tête du rapport — 5 CVEs les plus urgentes selon le score combiné (CVSS + KEV + EPSS + ransomware)
+- Section « Dérive historique » — bannière colorée (critical/warning/clean) + cartes d'alertes typées avec evidence, triées par niveau (critical d'abord)
 - Section « Posture & recommandations » — findings triés par sévérité, chaque carte expose description + recommandation concrète + evidence
 - Badges KEV / RANSOM / priorité (IMMEDIATE/HIGH/…) et score EPSS affichés à côté de chaque CVE dans le tableau des ports
 - Kill chain MITRE ATT&CK cliquable — chaque phase active scroll vers sa fiche
 - Filtre de recherche sur les ports (n°, service, version, CVE) — vanilla JS
-- Bouton « Copier en Markdown » — rapport complet (priorités + posture + ATT&CK + ports) prêt à coller dans Jira / PR / ticket
+- Bouton « Copier en Markdown » — rapport complet (dérive + priorités + posture + ATT&CK + ports) prêt à coller dans Jira / PR / ticket
 - Styles d'impression dédiés (`@media print`) — URLs révélées, couleurs claires
-- Exports alternatifs : `?format=json` (data brute avec priority_summary et context) et `?format=pdf` (A4 téléchargeable, généré via reportlab, section posture incluse)
+- Exports alternatifs : `?format=json` (data brute avec priority_summary, context et baseline) et `?format=pdf` (A4 téléchargeable, généré via reportlab, table de dérive + section posture incluses)
 
 **Historique & persistance**
 - Base SQLite locale — scans enregistrés à chaque `/scan/<ip>`, survit au redémarrage
@@ -383,7 +434,7 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-**243 tests** — validation IP, parsing Nmap XML, endpoints API (scan, rapport, history, version, health), corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue CVEs connues, déduplication, calcul de risque, chemin d'attaque, intégrité du catalogue), persistance SQLite (insertion, lecture, filtrage par IP), génération PDF (smoke test binaire, robustesse aux données partielles), priorisation EPSS + KEV (formule de score, seuils de niveau, cache TTL, batch API, fallback offline, dégradation sur cache périmé), détection contextuelle (classification 12 rôles, 12 règles anti-pattern avec frontières regex pour éviter les faux positifs, scénarios d'intégration).
+**283 tests** — validation IP, parsing Nmap XML, endpoints API (scan, rapport, history, version, health), corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue CVEs connues, déduplication, calcul de risque, chemin d'attaque, intégrité du catalogue), persistance SQLite (insertion, lecture, filtrage par IP), génération PDF (smoke test binaire, robustesse aux données partielles), priorisation EPSS + KEV (formule de score, seuils de niveau, cache TTL, batch API, fallback offline, dégradation sur cache périmé), détection contextuelle (classification 12 rôles, 12 règles anti-pattern avec frontières regex pour éviter les faux positifs, scénarios d'intégration), baseline historique (diff ports / versions / CVEs / findings / posture / rôle, niveau d'alerte par catégorie, escalade KEV, scénarios complets de compromission et de remédiation).
 
 ---
 
@@ -398,6 +449,7 @@ netaudit/
 │   ├── history.py           # Persistance SQLite + accès historique
 │   ├── prioritizer.py       # Priorisation EPSS + CISA KEV, cache 24 h, offline-safe
 │   ├── profiler.py          # Classification rôle + 12 règles anti-pattern, score posture
+│   ├── baseline.py          # Diff vs scan précédent, alertes de dérive typées
 │   ├── exports.py           # Génération PDF via reportlab
 │   ├── version.py           # Version sémantique + hash commit
 │   ├── data/
@@ -414,7 +466,8 @@ netaudit/
 │   ├── test_history.py      # Persistance SQLite (14 cas)
 │   ├── test_exports.py      # Génération PDF (6 cas)
 │   ├── test_prioritizer.py  # Priorisation EPSS + KEV (33 cas)
-│   └── test_profiler.py     # Classification rôle + posture (47 cas)
+│   ├── test_profiler.py     # Classification rôle + posture (47 cas)
+│   └── test_baseline.py     # Diff scans + alertes de dérive (40 cas)
 ├── .env.example             # Modèle de configuration
 ├── Dockerfile               # Image slim Python 3.11 + Nmap, Gunicorn, HEALTHCHECK
 └── requirements.txt         # Dépendances avec versions fixées

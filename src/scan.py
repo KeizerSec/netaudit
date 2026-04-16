@@ -283,9 +283,15 @@ def lancer_scan(ip: str) -> tuple:
     from profiler import enrich_context
     data = enrich_context(data)
 
-    # Persistance : l'historique survit au redémarrage et alimente /history.
-    # Import local pour éviter un couplage circulaire au chargement du module.
-    from history import record_scan
+    # Baseline : on diffe contre le scan précédent *avant* d'enregistrer le
+    # courant, sinon `scans_for_ip` remonterait le scan qu'on vient de faire.
+    # Chaque scan historique contient ainsi sa propre comparaison au précédent,
+    # accessible directement depuis /history/<ip> sans recalcul.
+    from history import scans_for_ip, record_scan
+    from baseline import enrich_baseline
+    previous_scans = scans_for_ip(ip, limit=1)
+    data = enrich_baseline(data, previous_scans[0] if previous_scans else None)
+
     record_scan(data)
 
     chemin = sauvegarder_rapport(ip, data)

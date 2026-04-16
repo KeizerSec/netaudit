@@ -843,6 +843,113 @@
             text-align: center;
         }
 
+        /* ── Baseline (dérive historique) ────────────────── */
+        .baseline-section { margin: 2rem 0; }
+
+        .baseline-banner {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            padding: 0.8rem 1.1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            font-size: 0.82rem;
+        }
+        .baseline-banner.drift-critical { border-color: var(--red);    background: rgba(248,81,73,0.06); }
+        .baseline-banner.drift-warning  { border-color: var(--orange); background: rgba(219,109,40,0.05); }
+        .baseline-banner.drift-clean    { border-color: var(--green);  background: rgba(63,185,80,0.05);  }
+
+        .baseline-banner .bsn-label {
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .baseline-banner .bsn-msg { color: var(--text); flex: 1; }
+        .baseline-banner.drift-critical .bsn-msg strong { color: var(--red); }
+        .baseline-banner.drift-warning  .bsn-msg strong { color: var(--orange); }
+        .baseline-banner.drift-clean    .bsn-msg strong { color: var(--green); }
+
+        .baseline-counts {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .bsn-count {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .bsn-count.lvl-critical { background: rgba(248,81,73,0.2);   color: var(--red);    }
+        .bsn-count.lvl-warning  { background: rgba(219,109,40,0.2);  color: var(--orange); }
+        .bsn-count.lvl-neutral  { background: rgba(139,148,158,0.15); color: var(--muted); }
+        .bsn-count.lvl-positive { background: rgba(63,185,80,0.2);   color: var(--green);  }
+
+        .alert-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.7rem;
+            padding: 0.7rem 1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left-width: 4px;
+            border-radius: 5px;
+            margin-bottom: 0.5rem;
+        }
+        .alert-card.lvl-critical { border-left-color: var(--red);    }
+        .alert-card.lvl-warning  { border-left-color: var(--orange); }
+        .alert-card.lvl-neutral  { border-left-color: var(--muted);  }
+        .alert-card.lvl-positive { border-left-color: var(--green);  }
+
+        .alert-body { flex: 1; }
+        .alert-title {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 0.2rem;
+        }
+        .alert-desc {
+            font-size: 0.74rem;
+            color: #adbac7;
+            line-height: 1.5;
+        }
+        .alert-evidence {
+            font-size: 0.68rem;
+            color: var(--muted);
+            font-family: 'Courier New', monospace;
+            margin-top: 0.3rem;
+        }
+        .alert-level {
+            font-size: 0.62rem;
+            font-weight: 700;
+            padding: 0.1rem 0.4rem;
+            border-radius: 3px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            flex-shrink: 0;
+            align-self: flex-start;
+        }
+        .alert-level.lvl-critical { background: rgba(248,81,73,0.2);   color: var(--red);    }
+        .alert-level.lvl-warning  { background: rgba(219,109,40,0.2);  color: var(--orange); }
+        .alert-level.lvl-neutral  { background: rgba(139,148,158,0.15); color: var(--muted); }
+        .alert-level.lvl-positive { background: rgba(63,185,80,0.2);   color: var(--green);  }
+
+        .baseline-empty {
+            padding: 0.8rem 1.1rem;
+            background: var(--surface);
+            border: 1px dashed var(--border);
+            border-radius: 6px;
+            color: var(--muted);
+            font-size: 0.78rem;
+            text-align: center;
+        }
+
         /* ── Print-friendly styles ───────────────────────── */
         @media print {
             :root {
@@ -990,6 +1097,26 @@
         </div>
     </div>
     {% endif %}
+    {% if data.baseline and data.baseline.has_previous %}
+    {% set bsn = data.baseline %}
+    <div class="meta-card">
+        <label>Dérive vs scan précédent</label>
+        <div class="value" style="font-size:0.95rem;">
+            {% if bsn.summary.critical > 0 %}
+                <span class="priority-badge priority-immediate">{{ bsn.summary.critical }} critique{{ 's' if bsn.summary.critical > 1 else '' }}</span>
+            {% elif bsn.summary.warning > 0 %}
+                <span class="priority-badge priority-high">{{ bsn.summary.warning }} warning{{ 's' if bsn.summary.warning > 1 else '' }}</span>
+            {% elif bsn.summary.total == 0 %}
+                <span class="priority-badge priority-low">stable</span>
+            {% else %}
+                <span class="priority-badge priority-info">{{ bsn.summary.total }} changement{{ 's' if bsn.summary.total > 1 else '' }}</span>
+            {% endif %}
+        </div>
+        <div style="font-size:0.68rem; color: var(--muted); margin-top:0.3rem;">
+            {% if bsn.previous_date %}depuis {{ bsn.previous_date }}{% endif %}
+        </div>
+    </div>
+    {% endif %}
     {% if data.context %}
     {% set grade = data.context.posture_grade | lower %}
     <div class="meta-card">
@@ -1014,6 +1141,53 @@
 {% if data.error %}
 <div class="error-banner">
     <strong>Erreur :</strong> {{ data.error }}
+</div>
+{% endif %}
+
+<!-- ── Baseline : dérive vs scan précédent ───────────────── -->
+{% if data.baseline %}
+{% set bsn = data.baseline %}
+<div class="baseline-section">
+    <h2 class="section-title">Dérive historique</h2>
+    {% if not bsn.has_previous %}
+        <div class="baseline-empty">
+            Premier scan pour cette IP — la détection de dérive sera active dès le prochain scan.
+        </div>
+    {% else %}
+        {% set drift_class = 'drift-critical' if bsn.summary.critical > 0
+                             else ('drift-warning' if bsn.summary.warning > 0 else 'drift-clean') %}
+        <div class="baseline-banner {{ drift_class }}">
+            <span class="bsn-label">vs {{ bsn.previous_date or 'scan précédent' }}</span>
+            <span class="bsn-msg">
+                {% if bsn.summary.critical > 0 %}
+                    <strong>Dérive critique</strong> — {{ bsn.summary.critical }} alerte(s) à investiguer immédiatement.
+                {% elif bsn.summary.warning > 0 %}
+                    <strong>Changements notables</strong> — {{ bsn.summary.warning }} warning(s) depuis le dernier scan.
+                {% elif bsn.summary.total == 0 %}
+                    <strong>Aucune dérive détectée</strong> — posture identique au scan précédent.
+                {% else %}
+                    {{ bsn.summary.total }} changement(s) mineur(s) depuis le dernier scan.
+                {% endif %}
+            </span>
+            <div class="baseline-counts">
+                {% if bsn.summary.critical > 0 %}<span class="bsn-count lvl-critical">{{ bsn.summary.critical }} crit.</span>{% endif %}
+                {% if bsn.summary.warning  > 0 %}<span class="bsn-count lvl-warning">{{ bsn.summary.warning }} warn.</span>{% endif %}
+                {% if bsn.summary.neutral  > 0 %}<span class="bsn-count lvl-neutral">{{ bsn.summary.neutral }} neutre(s)</span>{% endif %}
+                {% if bsn.summary.positive > 0 %}<span class="bsn-count lvl-positive">{{ bsn.summary.positive }} positive(s)</span>{% endif %}
+            </div>
+        </div>
+
+        {% for a in bsn.alerts %}
+        <div class="alert-card lvl-{{ a.level }}">
+            <span class="alert-level lvl-{{ a.level }}">{{ a.level }}</span>
+            <div class="alert-body">
+                <div class="alert-title">{{ a.title }}</div>
+                <div class="alert-desc">{{ a.description }}</div>
+                {% if a.evidence %}<div class="alert-evidence">{{ a.evidence }}</div>{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    {% endif %}
 </div>
 {% endif %}
 
@@ -1308,7 +1482,25 @@ function buildMarkdown(data) {
         lines.push("- **Posture :** " + data.context.posture_grade +
                    " (" + data.context.posture_score + "/100)");
     }
+    if (data.baseline && data.baseline.has_previous) {
+        var bs = data.baseline.summary || {};
+        lines.push("- **Dérive vs " + (data.baseline.previous_date || "scan précédent") + " :** " +
+                   (bs.critical || 0) + " crit. / " +
+                   (bs.warning  || 0) + " warn. / " +
+                   (bs.neutral  || 0) + " neut. / " +
+                   (bs.positive || 0) + " pos.");
+    }
     lines.push("");
+
+    if (data.baseline && data.baseline.has_previous && data.baseline.alerts && data.baseline.alerts.length) {
+        lines.push("## Dérive historique");
+        lines.push("");
+        data.baseline.alerts.forEach(function (a) {
+            lines.push("- **[" + a.level.toUpperCase() + "]** " + a.title +
+                       (a.evidence ? " — `" + a.evidence + "`" : ""));
+        });
+        lines.push("");
+    }
 
     if (data.context && data.context.findings && data.context.findings.length) {
         lines.push("## Posture & recommandations");
