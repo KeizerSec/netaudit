@@ -9,6 +9,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 from scan import lancer_scan, valider_ip, REPORT_DIR
+from version import version_info
 
 # Charger le fichier .env s'il existe (sans écraser les variables déjà définies)
 load_dotenv()
@@ -129,6 +130,17 @@ def rapport(ip: str):
 def health():
     """Endpoint de vérification — utilisé par les probes Docker / load balancer."""
     return jsonify({"status": "ok"}), 200
+
+
+@app.route("/version")
+def version():
+    """Retourne nom, version sémantique et hash commit courant.
+
+    Public (pas d'API key requise) — ces informations sont nécessaires aux
+    probes et aux outils de monitoring pour tracer précisément quelle build
+    répond. Ne contient aucune donnée sensible.
+    """
+    return jsonify(version_info()), 200
 
 
 # ─── Gestionnaires d'erreurs ──────────────────────────────────────────────────

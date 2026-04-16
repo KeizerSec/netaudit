@@ -42,6 +42,21 @@ class TestHealth:
         assert data["status"] == "ok"
 
 
+# ─── Endpoint /version ────────────────────────────────────────────────────────
+
+class TestVersion:
+    def test_retourne_200(self, client):
+        resp = client.get("/version")
+        assert resp.status_code == 200
+
+    def test_contient_nom_et_version(self, client):
+        data = client.get("/version").get_json()
+        assert data["name"] == "NetAudit"
+        assert isinstance(data["version"], str)
+        assert data["version"]  # non vide
+        assert "commit" in data  # clé présente même si valeur vide
+
+
 # ─── Endpoint /scan/<ip> ──────────────────────────────────────────────────────
 
 class TestScan:

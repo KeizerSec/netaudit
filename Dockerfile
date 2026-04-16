@@ -24,7 +24,19 @@ ENV NMAP_TIMEOUT=300
 ENV CACHE_SIZE=32
 # API_KEY est intentionnellement absente — à définir en production
 
+# Hash commit injecté au build via --build-arg BUILD_COMMIT=$(git rev-parse --short HEAD)
+# Exposé par l'endpoint /version pour tracer précisément l'image déployée.
+ARG BUILD_COMMIT=""
+ENV BUILD_COMMIT=$BUILD_COMMIT
+
 EXPOSE 5000
+
+# Healthcheck : probe HTTP via urllib (stdlib) pour éviter d'installer curl
+# juste pour ça. Exit 0 si /health répond 200, exit 1 sinon.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request, sys; \
+sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3).status == 200 else 1)" \
+    || exit 1
 
 # Lancer depuis src/ pour que les imports relatifs fonctionnent
 WORKDIR /app/src

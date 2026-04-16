@@ -19,13 +19,17 @@ REPORT_DIR    = os.getenv("REPORT_DIR",    os.path.join(BASE_DIR, "..", "rapport
 NMAP_TIMEOUT  = int(os.getenv("NMAP_TIMEOUT", "300"))
 CACHE_SIZE    = int(os.getenv("CACHE_SIZE",   "32"))
 
-# Logging avec rotation — crée le dossier parent si nécessaire
+# Logging double sortie : fichier rotaté (audit long terme) + stdout (docker logs,
+# systemd journal, agrégateurs type Loki/CloudWatch). Les deux handlers partagent
+# le même format pour faciliter le grep croisé.
 os.makedirs(os.path.dirname(os.path.abspath(LOG_FILE_PATH)), exist_ok=True)
-_handler = RotatingFileHandler(LOG_FILE_PATH, maxBytes=5 * 1024 * 1024, backupCount=5)
+_LOG_FORMAT = "%(asctime)s %(levelname)s %(message)s"
+_file_handler = RotatingFileHandler(LOG_FILE_PATH, maxBytes=5 * 1024 * 1024, backupCount=5)
+_stream_handler = logging.StreamHandler()
 logging.basicConfig(
-    handlers=[_handler],
+    handlers=[_file_handler, _stream_handler],
     level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
+    format=_LOG_FORMAT,
 )
 
 
