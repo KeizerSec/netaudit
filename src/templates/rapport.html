@@ -706,6 +706,143 @@
         .top-vuln-row .vport { color: var(--muted); font-size: 0.72rem; }
         .top-vuln-row .vscore { margin-left: auto; color: var(--text); font-weight: 700; }
 
+        /* ── Contexte : rôle + posture ───────────────────── */
+        .role-badge {
+            display: inline-block;
+            padding: 0.15rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            background: rgba(88,166,255,0.12);
+            color: var(--accent);
+            border: 1px solid rgba(88,166,255,0.3);
+        }
+        .role-confidence {
+            font-size: 0.68rem;
+            color: var(--muted);
+            margin-left: 0.4rem;
+        }
+        .posture-gauge {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+        }
+        .posture-grade {
+            font-family: 'Courier New', monospace;
+            font-size: 1.5rem;
+            font-weight: 800;
+            width: 2.2rem;
+            height: 2.2rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            flex-shrink: 0;
+        }
+        .grade-a { background: rgba(63,185,80,0.15);  color: var(--green);  border: 1px solid rgba(63,185,80,0.4); }
+        .grade-b { background: rgba(88,166,255,0.15); color: var(--accent); border: 1px solid rgba(88,166,255,0.4); }
+        .grade-c { background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid rgba(210,153,34,0.4); }
+        .grade-d { background: rgba(219,109,40,0.15); color: var(--orange); border: 1px solid rgba(219,109,40,0.4); }
+        .grade-f { background: rgba(248,81,73,0.18);  color: var(--red);    border: 1px solid rgba(248,81,73,0.5); }
+
+        .posture-bar {
+            flex: 1;
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            min-width: 80px;
+        }
+        .posture-bar-fill {
+            height: 100%;
+            transition: width 0.3s;
+        }
+        .posture-bar-fill.grade-a { background: var(--green);  }
+        .posture-bar-fill.grade-b { background: var(--accent); }
+        .posture-bar-fill.grade-c { background: var(--yellow); }
+        .posture-bar-fill.grade-d { background: var(--orange); }
+        .posture-bar-fill.grade-f { background: var(--red);    }
+
+        .context-section {
+            margin: 2rem 0;
+        }
+
+        .finding-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left-width: 4px;
+            border-radius: 6px;
+            padding: 0.85rem 1.1rem;
+            margin-bottom: 0.7rem;
+        }
+        .finding-card.sev-critical { border-left-color: var(--red);    }
+        .finding-card.sev-high     { border-left-color: var(--orange); }
+        .finding-card.sev-medium   { border-left-color: var(--yellow); }
+        .finding-card.sev-low      { border-left-color: var(--green);  }
+        .finding-card.sev-info     { border-left-color: var(--muted);  }
+
+        .finding-head {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.4rem;
+        }
+        .finding-sev {
+            font-size: 0.66rem;
+            font-weight: 700;
+            padding: 0.1rem 0.45rem;
+            border-radius: 3px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+        .finding-sev.sev-critical { background: rgba(248,81,73,0.2);  color: var(--red);    }
+        .finding-sev.sev-high     { background: rgba(219,109,40,0.2); color: var(--orange); }
+        .finding-sev.sev-medium   { background: rgba(210,153,34,0.2); color: var(--yellow); }
+        .finding-sev.sev-low      { background: rgba(63,185,80,0.2);  color: var(--green);  }
+        .finding-sev.sev-info     { background: rgba(139,148,158,0.15); color: var(--muted); }
+
+        .finding-title {
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: var(--text);
+            flex: 1;
+        }
+        .finding-body {
+            font-size: 0.78rem;
+            color: #adbac7;
+            line-height: 1.55;
+            margin-bottom: 0.4rem;
+        }
+        .finding-reco {
+            font-size: 0.76rem;
+            color: var(--text);
+            line-height: 1.5;
+            padding: 0.4rem 0.6rem;
+            background: rgba(63,185,80,0.06);
+            border-left: 2px solid var(--green);
+            border-radius: 0 4px 4px 0;
+            margin-bottom: 0.35rem;
+        }
+        .finding-reco strong { color: var(--green); }
+        .finding-evidence {
+            font-size: 0.7rem;
+            color: var(--muted);
+            font-family: 'Courier New', monospace;
+        }
+
+        .no-findings {
+            padding: 1rem;
+            background: rgba(63,185,80,0.06);
+            border: 1px solid rgba(63,185,80,0.25);
+            border-radius: 6px;
+            color: var(--green);
+            font-size: 0.82rem;
+            text-align: center;
+        }
+
         /* ── Print-friendly styles ───────────────────────── */
         @media print {
             :root {
@@ -844,12 +981,64 @@
         {% endif %}
     </div>
     {% endif %}
+    {% if data.context and data.context.role != 'unknown' %}
+    <div class="meta-card">
+        <label>Rôle détecté</label>
+        <div class="value" style="font-size:0.95rem;">
+            <span class="role-badge">{{ data.context.role | replace('_', ' ') }}</span>
+            <span class="role-confidence">confiance {{ data.context.role_confidence }}</span>
+        </div>
+    </div>
+    {% endif %}
+    {% if data.context %}
+    {% set grade = data.context.posture_grade | lower %}
+    <div class="meta-card">
+        <label>Posture</label>
+        <div class="posture-gauge" style="margin-top:0.2rem;">
+            <span class="posture-grade grade-{{ grade }}">{{ data.context.posture_grade }}</span>
+            <div style="flex:1;">
+                <div class="posture-bar">
+                    <div class="posture-bar-fill grade-{{ grade }}" style="width: {{ data.context.posture_score }}%;"></div>
+                </div>
+                <div style="font-size:0.68rem; color: var(--muted); margin-top:0.3rem;">
+                    {{ data.context.posture_score }}/100
+                    {% if data.context.findings %} · {{ data.context.findings | length }} finding{{ 's' if data.context.findings | length > 1 else '' }}{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- ── Erreur éventuelle ───────────────────────────────────── -->
 {% if data.error %}
 <div class="error-banner">
     <strong>Erreur :</strong> {{ data.error }}
+</div>
+{% endif %}
+
+<!-- ── Contexte : posture & findings ──────────────────────── -->
+{% if data.context and (data.context.findings or data.context.role != 'unknown') %}
+<div class="context-section">
+    <h2 class="section-title">Posture &amp; recommandations</h2>
+    {% if data.context.findings %}
+        {% for f in data.context.findings %}
+        {% set sev = f.severity | lower %}
+        <div class="finding-card sev-{{ sev }}">
+            <div class="finding-head">
+                <span class="finding-sev sev-{{ sev }}">{{ f.severity }}</span>
+                <span class="finding-title">{{ f.title }}</span>
+            </div>
+            <div class="finding-body">{{ f.description }}</div>
+            <div class="finding-reco"><strong>→ Recommandation :</strong> {{ f.recommendation }}</div>
+            {% if f.evidence %}
+            <div class="finding-evidence">{{ f.evidence }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="no-findings">Aucun anti-pattern détecté — la posture visible est conforme aux pratiques attendues pour ce rôle.</div>
+    {% endif %}
 </div>
 {% endif %}
 
@@ -1113,7 +1302,28 @@ function buildMarkdown(data) {
                    " (KEV: " + (ps.kev_count || 0) +
                    ", ransomware: " + (ps.ransomware_count || 0) + ")");
     }
+    if (data.context) {
+        lines.push("- **Rôle inféré :** " + data.context.role +
+                   " (confiance " + data.context.role_confidence + ")");
+        lines.push("- **Posture :** " + data.context.posture_grade +
+                   " (" + data.context.posture_score + "/100)");
+    }
     lines.push("");
+
+    if (data.context && data.context.findings && data.context.findings.length) {
+        lines.push("## Posture & recommandations");
+        lines.push("");
+        data.context.findings.forEach(function (f) {
+            lines.push("### [" + f.severity + "] " + f.title);
+            lines.push("");
+            lines.push(f.description);
+            lines.push("");
+            lines.push("**Recommandation :** " + f.recommendation);
+            if (f.evidence) lines.push("");
+            if (f.evidence) lines.push("*Evidence :* `" + f.evidence + "`");
+            lines.push("");
+        });
+    }
 
     if (data.priority_summary && data.priority_summary.top && data.priority_summary.top.length) {
         lines.push("## Top priorités d'action");

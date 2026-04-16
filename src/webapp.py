@@ -99,6 +99,7 @@ def scan(ip: str):
         "total_vulns":      data["total_vulns"],
         "attack_summary":   data.get("attack_summary"),
         "priority_summary": data.get("priority_summary"),
+        "context":          data.get("context"),
         "rapport_html":     f"/rapport/{ip}",
     })
 

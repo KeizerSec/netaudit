@@ -7,7 +7,7 @@
 ![MITRE ATT&CK](https://img.shields.io/badge/MITRE_ATT%26CK-Correlation-E8001D?style=for-the-badge&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)
 
-**Scanner de vulnérabilités réseau avec corrélation MITRE ATT&CK et priorisation EPSS + CISA KEV.** Donnez une IP, recevez un rapport structuré — ports ouverts, CVEs détectées, techniques d'attaque ATT&CK associées, chemin d'attaque ordonné selon le kill chain, **priorités d'action basées sur exploitation réelle** (présence dans le catalogue CISA KEV, score probabiliste FIRST EPSS, flag ransomware), niveau de risque global, priorités de détection SIEM. Trois formats de sortie (HTML interactif, JSON, PDF A4) et une API REST protégée par clé.
+**Scanner de vulnérabilités réseau avec corrélation MITRE ATT&CK, priorisation EPSS + CISA KEV et détection contextuelle.** Donnez une IP, recevez un rapport structuré — ports ouverts, CVEs détectées, techniques d'attaque ATT&CK associées, chemin d'attaque ordonné selon le kill chain, **priorités d'action basées sur exploitation réelle** (présence dans le catalogue CISA KEV, score probabiliste FIRST EPSS, flag ransomware), **classification automatique du rôle de l'hôte + analyse de posture** (12 règles anti-pattern, score 0–100, grade A–F), niveau de risque global, priorités de détection SIEM. Trois formats de sortie (HTML interactif, JSON, PDF A4) et une API REST protégée par clé.
 
 > **Usage légal uniquement.** Ne scannez que des hôtes sur lesquels vous avez une autorisation explicite.
 
@@ -54,13 +54,23 @@ Vous donnez une IP  →  NetAudit lance Nmap + Vulners  →  Vous obtenez :
   • Top 5 priorités d'action affiché en tête du rapport
   • Cache disque 24 h — offline-safe, dégrade sur cache périmé si réseau KO
 
-  Couche 4 — Rapport & exports
+  Couche 4 — Détection contextuelle (rôle + posture)
+  • Classification automatique du rôle — web, DB, mail, DNS, IoT, admin,
+    hypervisor, directory, file, monitoring, VoIP, workstation
+  • Catalogue de 12 règles anti-pattern — DB exposée, Telnet clair,
+    FTP sans TLS, SNMP public, multi-admin, web sans HTTPS, OS EOL,
+    versions non-supportées, DB+web colocalisés, IoT management, etc.
+  • Chaque finding = severity + description + recommandation + evidence
+  • Score de posture 0–100 → grade A/B/C/D/F, comparable dans le temps
+  • 100 % local — aucune dépendance réseau, déterministe
+
+  Couche 6 — Rapport & exports
   • Rapport HTML dark-mode : donut CVSS, kill chain cliquable, filtre ports
   • Export JSON brut pour intégration outils tiers
   • Export PDF A4 généré via reportlab — archivage, audit, rapport formel
   • Bouton « Copier en Markdown » pour ticket / PR / rapport d'incident
 
-  Couche 5 — Historique & observabilité
+  Couche 7 — Historique & observabilité
   • Persistance SQLite — chaque scan survit au redémarrage
   • Endpoints /history et /history/<ip> pour suivi de tendances
   • /version — traçabilité de l'image déployée (semver + hash commit)
@@ -188,6 +198,23 @@ curl http://localhost:5000/scan/192.168.1.1 \
     ],
     "sources_used": ["CISA KEV", "FIRST EPSS"]
   },
+  "context": {
+    "role": "admin_host",
+    "role_confidence": "high",
+    "role_score": 1.8,
+    "posture_score": 72,
+    "posture_grade": "C",
+    "summary": { "critical": 0, "high": 1, "medium": 1, "low": 0, "info": 0 },
+    "findings": [
+      {
+        "severity": "HIGH",
+        "title": "Version(s) de service non-supportée(s)",
+        "description": "Au moins un service expose une version sans correctifs…",
+        "recommendation": "Mettre à jour vers une branche supportée du produit.",
+        "evidence": "OpenSSH 6.x (release > 8 ans)"
+      }
+    ]
+  },
   "rapport_html": "/rapport/192.168.1.1"
 }
 ```
@@ -224,7 +251,7 @@ curl http://localhost:5000/history/192.168.1.1
 
 ```bash
 curl http://localhost:5000/version
-# → {"name": "NetAudit", "version": "2.2.0", "commit": "0403e03"}
+# → {"name": "NetAudit", "version": "2.3.0", "commit": "0403e03"}
 ```
 
 ---
@@ -296,6 +323,26 @@ cp .env.example .env
 - Offline-safe — échec réseau sans cache = scan continue sans enrichissement, cache périmé réutilisé en mode dégradé
 - Bloc « Top priorités d'action » affiché en tête du rapport HTML
 
+**Détection contextuelle (rôle + posture)**
+- Classification automatique du rôle de l'hôte — 12 catégories (web, DB, mail, DNS, IoT, admin, monitoring, file, directory, hypervisor, VoIP, workstation)
+- Signatures pondérées : ports + services → score par rôle, meilleur gagne, marge → confiance (high / medium / low)
+- 12 règles anti-pattern embarquées :
+  - DB publiquement exposée *(CRITICAL)*
+  - Telnet actif *(CRITICAL)* — credentials en clair
+  - FTP sans TLS *(HIGH)* — avec détection FTPS pour éviter le faux positif
+  - TFTP exposé *(HIGH)*
+  - SNMP public *(HIGH)* — community string par défaut
+  - OS en fin de vie *(HIGH)* — XP, 2003, 2008, 7, Linux 2.6, CentOS 5/6, …
+  - Version de service non-supportée *(HIGH)* — Apache 2.2, OpenSSH 5/6, PHP 5, OpenSSL 1.0.x, … (regex à frontière)
+  - DB + web colocalisés *(HIGH)* — pivot local en cas de RCE web
+  - IoT avec management exposé *(HIGH)* — Telnet, CWMP/TR-069
+  - Multi-protocole d'admin *(MEDIUM)*
+  - Serveur web sans HTTPS *(MEDIUM)* — conditionné au rôle inféré
+  - Surface d'attaque élargie *(MEDIUM)* — > 15 ports ouverts
+- Chaque finding = sévérité + description + recommandation concrète + evidence
+- Score de posture 0–100 (100 − pénalités), grade A (≥ 90) / B (≥ 75) / C (≥ 55) / D (≥ 35) / F
+- 100 % local, déterministe — scores comparables entre scans
+
 **Rapport & UX**
 - Rapport HTML dark-mode avec donut SVG de répartition des sévérités CVSS
 - Kill chain MITRE ATT&CK cliquable — chaque phase active scroll vers sa fiche
@@ -327,7 +374,7 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-**196 tests** — validation IP, parsing Nmap XML, endpoints API (scan, rapport, history, version, health), corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue CVEs connues, déduplication, calcul de risque, chemin d'attaque, intégrité du catalogue), persistance SQLite (insertion, lecture, filtrage par IP), génération PDF (smoke test binaire, robustesse aux données partielles), priorisation EPSS + KEV (formule de score, seuils de niveau, cache TTL, batch API, fallback offline, dégradation sur cache périmé).
+**243 tests** — validation IP, parsing Nmap XML, endpoints API (scan, rapport, history, version, health), corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue CVEs connues, déduplication, calcul de risque, chemin d'attaque, intégrité du catalogue), persistance SQLite (insertion, lecture, filtrage par IP), génération PDF (smoke test binaire, robustesse aux données partielles), priorisation EPSS + KEV (formule de score, seuils de niveau, cache TTL, batch API, fallback offline, dégradation sur cache périmé), détection contextuelle (classification 12 rôles, 12 règles anti-pattern avec frontières regex pour éviter les faux positifs, scénarios d'intégration).
 
 ---
 
@@ -341,6 +388,7 @@ netaudit/
 │   ├── attack_mapper.py     # Corrélation MITRE ATT&CK — techniques, chemin, risque
 │   ├── history.py           # Persistance SQLite + accès historique
 │   ├── prioritizer.py       # Priorisation EPSS + CISA KEV, cache 24 h, offline-safe
+│   ├── profiler.py          # Classification rôle + 12 règles anti-pattern, score posture
 │   ├── exports.py           # Génération PDF via reportlab
 │   ├── version.py           # Version sémantique + hash commit
 │   ├── data/
@@ -356,7 +404,8 @@ netaudit/
 │   ├── test_attack_mapper.py # Corrélation ATT&CK (81 cas)
 │   ├── test_history.py      # Persistance SQLite (14 cas)
 │   ├── test_exports.py      # Génération PDF (6 cas)
-│   └── test_prioritizer.py  # Priorisation EPSS + KEV (33 cas)
+│   ├── test_prioritizer.py  # Priorisation EPSS + KEV (33 cas)
+│   └── test_profiler.py     # Classification rôle + posture (47 cas)
 ├── .env.example             # Modèle de configuration
 ├── Dockerfile               # Image slim Python 3.11 + Nmap, Gunicorn, HEALTHCHECK
 └── requirements.txt         # Dépendances avec versions fixées

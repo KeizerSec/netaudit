@@ -278,6 +278,11 @@ def lancer_scan(ip: str) -> tuple:
     from prioritizer import enrich_vulns
     data = enrich_vulns(data)
 
+    # Détection contextuelle — classification du rôle de l'hôte et analyse
+    # de posture (règles anti-pattern). 100 % local, pas de dépendance réseau.
+    from profiler import enrich_context
+    data = enrich_context(data)
+
     # Persistance : l'historique survit au redémarrage et alimente /history.
     # Import local pour éviter un couplage circulaire au chargement du module.
     from history import record_scan

@@ -32,6 +32,15 @@ _RISK_COLORS = {
     "HIGH":     colors.HexColor("#F97316"),
     "MEDIUM":   colors.HexColor("#EAB308"),
     "LOW":      colors.HexColor("#22C55E"),
+    "INFO":     colors.HexColor("#64748B"),
+}
+
+_GRADE_COLORS = {
+    "A": colors.HexColor("#22C55E"),
+    "B": colors.HexColor("#3B82F6"),
+    "C": colors.HexColor("#EAB308"),
+    "D": colors.HexColor("#F97316"),
+    "F": colors.HexColor("#DC2626"),
 }
 
 
@@ -181,6 +190,66 @@ def _build_ports_table(data: dict, styles) -> list:
     return flow
 
 
+def _build_context_section(data: dict, styles) -> list:
+    ctx = data.get("context") or {}
+    if not ctx:
+        return []
+
+    h2 = ParagraphStyle(
+        "H2", parent=styles["Heading2"], fontSize=14,
+        textColor=colors.HexColor("#0F172A"), spaceBefore=12, spaceAfter=6,
+    )
+    grade = (ctx.get("posture_grade") or "F").upper()
+    grade_color = _GRADE_COLORS.get(grade, colors.HexColor("#64748B"))
+    role = (ctx.get("role") or "unknown").replace("_", " ")
+    flow = [
+        Paragraph("Posture &amp; contexte", h2),
+        Paragraph(
+            f'<b>Rôle inféré :</b> {role} '
+            f'<font color="#64748B">(confiance {ctx.get("role_confidence", "none")})</font> &nbsp;•&nbsp; '
+            f'<b>Posture :</b> <font color="{grade_color.hexval()}"><b>{grade}</b></font> '
+            f'({ctx.get("posture_score", 0)}/100)',
+            styles["Normal"],
+        ),
+        Spacer(1, 6),
+    ]
+
+    findings = ctx.get("findings") or []
+    if not findings:
+        flow.append(Paragraph("<i>Aucun anti-pattern détecté.</i>", styles["Normal"]))
+        flow.append(Spacer(1, 8))
+        return flow
+
+    cell = ParagraphStyle("CellCtx", parent=styles["Normal"], fontSize=8, leading=10)
+    rows = [["Sévérité", "Finding", "Recommandation"]]
+    for f in findings:
+        sev = (f.get("severity") or "INFO").upper()
+        sev_color = _style_for_risk(sev).hexval()
+        rows.append([
+            Paragraph(f'<font color="{sev_color}"><b>{sev}</b></font>', cell),
+            Paragraph(f"<b>{f.get('title', '')}</b><br/>{f.get('description', '')}", cell),
+            Paragraph(f.get("recommendation", ""), cell),
+        ])
+    tbl = Table(rows, colWidths=[22 * mm, 75 * mm, 68 * mm], repeatRows=1)
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND",     (0, 0), (-1, 0), colors.HexColor("#1E293B")),
+        ("TEXTCOLOR",      (0, 0), (-1, 0), colors.white),
+        ("FONTNAME",       (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE",       (0, 0), (-1, -1), 9),
+        ("ALIGN",          (0, 0), (-1, -1), "LEFT"),
+        ("VALIGN",         (0, 0), (-1, -1), "TOP"),
+        ("GRID",           (0, 0), (-1, -1), 0.3, colors.HexColor("#CBD5E1")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+        ("LEFTPADDING",    (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING",   (0, 0), (-1, -1), 5),
+        ("TOPPADDING",     (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING",  (0, 0), (-1, -1), 4),
+    ]))
+    flow.append(tbl)
+    flow.append(Spacer(1, 6))
+    return flow
+
+
 def _score_color(score: float) -> colors.Color:
     try:
         s = float(score)
@@ -214,6 +283,7 @@ def render_pdf(data: dict) -> bytes:
 
     story: list[Any] = []
     story.extend(_build_header(data, styles))
+    story.extend(_build_context_section(data, styles))
     story.extend(_build_attack_summary(data, styles))
     story.extend(_build_ports_table(data, styles))
 
