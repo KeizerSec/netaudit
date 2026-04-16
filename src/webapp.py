@@ -10,6 +10,7 @@ from flask_limiter.util import get_remote_address
 
 from scan import lancer_scan, valider_ip, REPORT_DIR
 from version import version_info
+from history import list_scans, scans_for_ip
 
 # Charger le fichier .env s'il existe (sans écraser les variables déjà définies)
 load_dotenv()
@@ -141,6 +142,40 @@ def version():
     répond. Ne contient aucune donnée sensible.
     """
     return jsonify(version_info()), 200
+
+
+@app.route("/history")
+@require_api_key
+def history():
+    """Liste synthétique des derniers scans persistés (toutes IPs confondues).
+
+    Paramètre optionnel `limit` (défaut 100, max 500).
+    """
+    try:
+        limit = int(request.args.get("limit", 100))
+    except (TypeError, ValueError):
+        limit = 100
+    return jsonify({
+        "status": "ok",
+        "count":  len(scans := list_scans(limit=limit)),
+        "scans":  scans,
+    })
+
+
+@app.route("/history/<ip>")
+@require_api_key
+def history_for_ip(ip: str):
+    """Historique détaillé (data complète) pour une IP donnée."""
+    if not valider_ip(ip):
+        return jsonify({"error": "Adresse IP invalide.", "status": "failed"}), 400
+
+    scans = scans_for_ip(ip)
+    return jsonify({
+        "status": "ok",
+        "ip":     ip,
+        "count":  len(scans),
+        "scans":  scans,
+    })
 
 
 # ─── Gestionnaires d'erreurs ──────────────────────────────────────────────────

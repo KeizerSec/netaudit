@@ -273,6 +273,11 @@ def lancer_scan(ip: str) -> tuple:
     from attack_mapper import enrich_scan_result
     data = enrich_scan_result(data)
 
+    # Persistance : l'historique survit au redémarrage et alimente /history.
+    # Import local pour éviter un couplage circulaire au chargement du module.
+    from history import record_scan
+    record_scan(data)
+
     chemin = sauvegarder_rapport(ip, data)
     return data, chemin
 

@@ -57,6 +57,47 @@ class TestVersion:
         assert "commit" in data  # clé présente même si valeur vide
 
 
+# ─── Endpoints /history ───────────────────────────────────────────────────────
+
+class TestHistory:
+    def test_liste_retourne_200(self, client):
+        with patch("webapp.list_scans", return_value=[]):
+            resp = client.get("/history")
+        assert resp.status_code == 200
+        assert resp.get_json()["status"] == "ok"
+
+    def test_liste_contient_scans(self, client):
+        fake = [{"id": 1, "ip": "10.0.0.1", "scan_date": "2026-04-16",
+                 "host_up": True, "total_vulns": 3, "risk_level": "HIGH"}]
+        with patch("webapp.list_scans", return_value=fake):
+            data = client.get("/history").get_json()
+        assert data["count"] == 1
+        assert data["scans"][0]["ip"] == "10.0.0.1"
+
+    def test_limit_parametre_invalide_utilise_defaut(self, client):
+        with patch("webapp.list_scans", return_value=[]) as m:
+            client.get("/history?limit=pas-un-nombre")
+        m.assert_called_once_with(limit=100)
+
+    def test_history_ip_invalide_retourne_400(self, client):
+        resp = client.get("/history/pas-une-ip")
+        assert resp.status_code == 400
+
+    def test_history_ip_valide_retourne_scans(self, client):
+        fake = [{"id": 1, "ip": "10.0.0.1", "data": {"ports": []}}]
+        with patch("webapp.scans_for_ip", return_value=fake):
+            resp = client.get("/history/10.0.0.1")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["ip"] == "10.0.0.1"
+        assert data["count"] == 1
+
+    def test_history_ip_auth_requise(self, client):
+        webapp_module.API_KEY = "secret"
+        resp = client.get("/history/10.0.0.1")
+        assert resp.status_code == 401
+
+
 # ─── Endpoint /scan/<ip> ──────────────────────────────────────────────────────
 
 class TestScan:

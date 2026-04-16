@@ -22,6 +22,7 @@ ENV LOG_FILE_PATH=/app/logs/scan.log
 ENV REPORT_DIR=/app/rapports
 ENV NMAP_TIMEOUT=300
 ENV CACHE_SIZE=32
+ENV HISTORY_DB_PATH=/app/netaudit.db
 # API_KEY est intentionnellement absente — à définir en production
 
 # Hash commit injecté au build via --build-arg BUILD_COMMIT=$(git rev-parse --short HEAD)
