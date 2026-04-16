@@ -4,13 +4,14 @@ import logging
 from functools import wraps
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, send_file, request
+from flask import Flask, jsonify, send_file, request, Response
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 from scan import lancer_scan, valider_ip, REPORT_DIR
 from version import version_info
 from history import list_scans, scans_for_ip
+from exports import render_pdf
 
 # Charger le fichier .env s'il existe (sans écraser les variables déjà définies)
 load_dotenv()
@@ -105,12 +106,38 @@ def scan(ip: str):
 @require_api_key
 def rapport(ip: str):
     """
-    Retourne le rapport HTML d'un scan précédemment effectué.
+    Retourne le rapport d'un scan précédemment effectué.
+
+    Paramètre `format` (query string) :
+      - absent ou `html` → rapport HTML complet (défaut).
+      - `json`           → data structurée complète (issue du dernier scan persisté).
+      - `pdf`            → rapport PDF A4 téléchargeable.
+
     Renvoie 404 si le scan n'a pas encore été lancé.
     """
     if not valider_ip(ip):
         return jsonify({"error": "Adresse IP invalide."}), 400
 
+    fmt = (request.args.get("format") or "html").lower()
+
+    if fmt == "json":
+        records = scans_for_ip(ip, limit=1)
+        if not records:
+            return jsonify({"error": "Aucun scan enregistré.", "status": "not_found"}), 404
+        return jsonify(records[0].get("data") or {})
+
+    if fmt == "pdf":
+        records = scans_for_ip(ip, limit=1)
+        if not records or not records[0].get("data"):
+            return jsonify({"error": "Aucun scan enregistré.", "status": "not_found"}), 404
+        pdf_bytes = render_pdf(records[0]["data"])
+        return Response(
+            pdf_bytes,
+            mimetype="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="netaudit_{ip}.pdf"'},
+        )
+
+    # Format HTML par défaut — fichier statique généré par sauvegarder_rapport().
     # Construction sécurisée du chemin (protection anti path-traversal)
     chemin = os.path.realpath(os.path.join(REPORT_DIR, f"{ip}_scan.html"))
     reports_real = os.path.realpath(REPORT_DIR)

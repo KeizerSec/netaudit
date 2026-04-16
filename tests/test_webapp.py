@@ -204,6 +204,35 @@ class TestRapport:
         resp = client.get("/rapport/127.0.0.1")
         assert resp.status_code == 401
 
+    def test_format_json_retourne_data(self, client):
+        fake = [{"data": {"ip": "10.0.0.1", "ports": [], "total_vulns": 0}}]
+        with patch("webapp.scans_for_ip", return_value=fake):
+            resp = client.get("/rapport/10.0.0.1?format=json")
+        assert resp.status_code == 200
+        assert resp.get_json()["ip"] == "10.0.0.1"
+
+    def test_format_json_sans_scan_retourne_404(self, client):
+        with patch("webapp.scans_for_ip", return_value=[]):
+            resp = client.get("/rapport/10.0.0.1?format=json")
+        assert resp.status_code == 404
+
+    def test_format_pdf_retourne_pdf(self, client):
+        fake = [{"data": {
+            "ip": "10.0.0.1", "scan_date": "2026-04-16",
+            "host_up": True, "ports": [], "total_vulns": 0,
+        }}]
+        with patch("webapp.scans_for_ip", return_value=fake):
+            resp = client.get("/rapport/10.0.0.1?format=pdf")
+        assert resp.status_code == 200
+        assert resp.mimetype == "application/pdf"
+        assert resp.data[:5] == b"%PDF-"
+        assert "attachment" in resp.headers.get("Content-Disposition", "")
+
+    def test_format_pdf_sans_scan_retourne_404(self, client):
+        with patch("webapp.scans_for_ip", return_value=[]):
+            resp = client.get("/rapport/10.0.0.1?format=pdf")
+        assert resp.status_code == 404
+
 
 # ─── Erreurs globales ─────────────────────────────────────────────────────────
 
