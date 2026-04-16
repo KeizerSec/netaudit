@@ -517,6 +517,142 @@
             flex-wrap: wrap;
             gap: 0.5rem;
         }
+
+        /* ── Toolbar (exports, search, copy) ─────────────── */
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.45rem 0.85rem;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .btn:hover { border-color: var(--accent); background: rgba(88,166,255,0.08); }
+        .btn.btn-accent { color: var(--accent); }
+
+        .search-box {
+            flex: 1;
+            min-width: 180px;
+            padding: 0.45rem 0.75rem;
+            font-size: 0.82rem;
+            color: var(--text);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            outline: none;
+            font-family: inherit;
+        }
+        .search-box:focus { border-color: var(--accent); }
+        .search-box::placeholder { color: var(--muted); }
+
+        .toast {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            padding: 0.7rem 1.1rem;
+            background: var(--surface);
+            border: 1px solid var(--green);
+            border-radius: 6px;
+            color: var(--green);
+            font-size: 0.82rem;
+            font-weight: 600;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.2s, transform 0.2s;
+            pointer-events: none;
+            z-index: 100;
+        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+
+        /* ── CVSS donut ──────────────────────────────────── */
+        .donut-wrap {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .donut {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            flex-shrink: 0;
+        }
+
+        .donut svg { transform: rotate(-90deg); }
+        .donut-total {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+        .donut-total .n { font-size: 1.2rem; color: var(--text); line-height: 1; }
+        .donut-total .lbl { font-size: 0.55rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+        .donut-legend {
+            display: grid;
+            grid-template-columns: auto auto;
+            gap: 0.15rem 0.5rem;
+            font-size: 0.7rem;
+            color: var(--muted);
+        }
+        .donut-legend .dot {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            vertical-align: middle;
+            margin-right: 0.35rem;
+        }
+
+        /* ── Kill chain : rendre les étapes cliquables ──── */
+        .kc-step.kc-active { cursor: pointer; }
+        .kc-step.kc-active:hover .kc-label { color: var(--accent); }
+        .kc-link {
+            color: inherit;
+            text-decoration: none;
+            display: contents;
+        }
+
+        /* ── Print-friendly styles ───────────────────────── */
+        @media print {
+            :root {
+                --bg:      #ffffff;
+                --surface: #f7f7f7;
+                --border:  #cccccc;
+                --text:    #111111;
+                --muted:   #555555;
+            }
+            body { padding: 1rem; max-width: 100%; }
+            .toolbar, .search-box, .btn, .toast, details { display: none !important; }
+            .killchain, .attack-phase, .table-wrap, .detection-block {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+            .kc-step { opacity: 1 !important; }
+            a { color: #0a52cc !important; text-decoration: none; }
+            .tech-id::after, .vuln-id a::after {
+                content: " (" attr(href) ")";
+                font-size: 0.7rem;
+                color: #555;
+            }
+        }
     </style>
 </head>
 <body>
@@ -537,7 +673,27 @@
     {% endif %}
 </header>
 
+<!-- ── Toolbar : exports + filtre + copie Markdown ─────────── -->
+<div class="toolbar">
+    <a class="btn btn-accent" href="/rapport/{{ data.ip }}?format=json" target="_blank" rel="noopener">↓ JSON</a>
+    <a class="btn btn-accent" href="/rapport/{{ data.ip }}?format=pdf">↓ PDF</a>
+    <button class="btn" id="btn-copy-md" type="button">⧉ Copier en Markdown</button>
+    <button class="btn" id="btn-print" type="button" onclick="window.print()">⎙ Imprimer</button>
+    <input class="search-box" id="port-search" type="search" placeholder="Filtrer les ports (n°, service, version, CVE)…" aria-label="Filtrer les ports">
+</div>
+
 <!-- ── Meta cards ─────────────────────────────────────────── -->
+{# Décompte des CVEs par tranche de sévérité — utilisé pour le donut et les exports #}
+{% set ns = namespace(crit=0, high=0, med=0, low=0) %}
+{% for port in data.ports %}
+    {% for v in port.vulns %}
+        {% set s = v.score | float %}
+        {% if s >= 9.0 %}{% set ns.crit = ns.crit + 1 %}
+        {% elif s >= 7.0 %}{% set ns.high = ns.high + 1 %}
+        {% elif s >= 4.0 %}{% set ns.med = ns.med + 1 %}
+        {% else %}{% set ns.low = ns.low + 1 %}{% endif %}
+    {% endfor %}
+{% endfor %}
 <div class="meta">
     <div class="meta-card">
         <label>Adresse IP</label>
@@ -554,7 +710,39 @@
     <div class="meta-card">
         <label>Vulnérabilités</label>
         {% if data.total_vulns > 0 %}
-            <div class="value danger">{{ data.total_vulns }}</div>
+            {# Donut SVG natif : arcs proportionnels par sévérité, tient sans JS et à l'impression. #}
+            {% set C = 188.496 %}{# 2π·30, circonférence d'un cercle de rayon 30 #}
+            {% set total = data.total_vulns %}
+            {% set a_crit = C * ns.crit / total %}
+            {% set a_high = C * ns.high / total %}
+            {% set a_med  = C * ns.med  / total %}
+            {% set a_low  = C * ns.low  / total %}
+            <div class="donut-wrap">
+                <div class="donut">
+                    <svg width="80" height="80" viewBox="0 0 80 80">
+                        <circle cx="40" cy="40" r="30" fill="none" stroke="var(--border)" stroke-width="12"/>
+                        <circle cx="40" cy="40" r="30" fill="none" stroke="var(--red)"    stroke-width="12"
+                                stroke-dasharray="{{ '%.2f' | format(a_crit) }} {{ '%.2f' | format(C - a_crit) }}"
+                                stroke-dashoffset="0"/>
+                        <circle cx="40" cy="40" r="30" fill="none" stroke="var(--orange)" stroke-width="12"
+                                stroke-dasharray="{{ '%.2f' | format(a_high) }} {{ '%.2f' | format(C - a_high) }}"
+                                stroke-dashoffset="{{ '%.2f' | format(-a_crit) }}"/>
+                        <circle cx="40" cy="40" r="30" fill="none" stroke="var(--yellow)" stroke-width="12"
+                                stroke-dasharray="{{ '%.2f' | format(a_med) }} {{ '%.2f' | format(C - a_med) }}"
+                                stroke-dashoffset="{{ '%.2f' | format(-(a_crit + a_high)) }}"/>
+                        <circle cx="40" cy="40" r="30" fill="none" stroke="var(--green)"  stroke-width="12"
+                                stroke-dasharray="{{ '%.2f' | format(a_low) }} {{ '%.2f' | format(C - a_low) }}"
+                                stroke-dashoffset="{{ '%.2f' | format(-(a_crit + a_high + a_med)) }}"/>
+                    </svg>
+                    <div class="donut-total"><span class="n">{{ total }}</span><span class="lbl">CVEs</span></div>
+                </div>
+                <div class="donut-legend">
+                    <span><span class="dot" style="background: var(--red);"></span>Crit.</span><span>{{ ns.crit }}</span>
+                    <span><span class="dot" style="background: var(--orange);"></span>Haute</span><span>{{ ns.high }}</span>
+                    <span><span class="dot" style="background: var(--yellow);"></span>Moy.</span><span>{{ ns.med }}</span>
+                    <span><span class="dot" style="background: var(--green);"></span>Basse</span><span>{{ ns.low }}</span>
+                </div>
+            </div>
         {% else %}
             <div class="value" style="color: var(--green);">0</div>
         {% endif %}
@@ -589,9 +777,9 @@
                 <th>Vulnérabilités</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="ports-tbody">
         {% for port in data.ports %}
-            <tr>
+            <tr class="port-row" data-search="{{ (port.port ~ ' ' ~ port.protocol ~ ' ' ~ port.service ~ ' ' ~ port.version ~ ' ' ~ (port.vulns | map(attribute='id') | join(' '))) | lower }}">
                 <td class="port-num">{{ port.port }}</td>
                 <td>{{ port.protocol }}</td>
                 <td class="state-{{ port.state }}">{{ port.state }}</td>
@@ -659,16 +847,25 @@
         ] %}
         {% set active_tactics = atk.phases | map(attribute='tactic_id') | list %}
         {% for tactic_id, tactic_short in kc_all %}
-        <div class="kc-step {% if tactic_id in active_tactics %}kc-active{% endif %}">
-            <div class="kc-dot"></div>
-            <span class="kc-label">{{ tactic_short }}</span>
-        </div>
+        {% if tactic_id in active_tactics %}
+            <a class="kc-link" href="#phase-{{ tactic_id }}" title="Aller à la phase {{ tactic_short }}">
+                <div class="kc-step kc-active">
+                    <div class="kc-dot"></div>
+                    <span class="kc-label">{{ tactic_short }}</span>
+                </div>
+            </a>
+        {% else %}
+            <div class="kc-step">
+                <div class="kc-dot"></div>
+                <span class="kc-label">{{ tactic_short }}</span>
+            </div>
+        {% endif %}
         {% endfor %}
     </div>
 
     <!-- Phases détaillées ───────────────────────── -->
     {% for phase in atk.phases %}
-    <div class="attack-phase">
+    <div class="attack-phase" id="phase-{{ phase.tactic_id }}">
         <div class="phase-header">
             <span class="phase-num">Phase {{ phase.phase }}</span>
             <span class="phase-tactic">{{ phase.tactic_id }}</span>
@@ -732,6 +929,125 @@
     <span>NetAudit</span>
     <span>Généré le {{ data.scan_date }}</span>
 </footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+// Filtre vanilla JS sur le tableau des ports. Le champ `data-search` est
+// prémâché côté serveur (lowercase), on compare juste en .includes().
+(function initPortSearch() {
+    var input = document.getElementById("port-search");
+    if (!input) return;
+    input.addEventListener("input", function () {
+        var q = input.value.trim().toLowerCase();
+        document.querySelectorAll(".port-row").forEach(function (row) {
+            var hay = row.getAttribute("data-search") || "";
+            row.style.display = (!q || hay.indexOf(q) !== -1) ? "" : "none";
+        });
+    });
+})();
+
+// Copie du rapport en Markdown — utile pour coller dans un ticket Jira,
+// une PR, un rapport d'incident. Le payload est construit depuis un objet
+// JS sérialisé par le serveur plutôt que scrapé du DOM.
+var REPORT_DATA = {{ data | tojson | safe }};
+
+function showToast(msg, ok) {
+    var t = document.getElementById("toast");
+    t.textContent = msg;
+    t.style.borderColor = ok ? "var(--green)" : "var(--red)";
+    t.style.color = ok ? "var(--green)" : "var(--red)";
+    t.classList.add("show");
+    setTimeout(function () { t.classList.remove("show"); }, 2200);
+}
+
+function buildMarkdown(data) {
+    var lines = [];
+    lines.push("# Rapport NetAudit — " + (data.ip || "?"));
+    lines.push("");
+    lines.push("- **Date :** " + (data.scan_date || "?"));
+    lines.push("- **Hôte actif :** " + (data.host_up ? "oui" : "non"));
+    if (data.hostname) lines.push("- **Nom DNS :** " + data.hostname);
+    if (data.os_guess) lines.push("- **OS supposé :** " + data.os_guess);
+    lines.push("- **Ports détectés :** " + (data.ports ? data.ports.length : 0));
+    lines.push("- **Vulnérabilités :** " + (data.total_vulns || 0));
+
+    if (data.attack_summary && data.attack_summary.risk_level) {
+        lines.push("- **Niveau de risque ATT&CK :** " + data.attack_summary.risk_level);
+    }
+    lines.push("");
+
+    if (data.ports && data.ports.length) {
+        lines.push("## Ports");
+        lines.push("");
+        lines.push("| Port | Service | Version | CVEs |");
+        lines.push("|---|---|---|---|");
+        data.ports.forEach(function (p) {
+            var cves = (p.vulns || []).map(function (v) {
+                return v.id + " (" + (v.score || 0).toFixed(1) + ")";
+            }).join(", ") || "—";
+            lines.push("| " + (p.port || "?") + "/" + (p.protocol || "") +
+                       " | " + (p.service || "—") +
+                       " | " + (p.version || "—") +
+                       " | " + cves + " |");
+        });
+        lines.push("");
+    }
+
+    var atk = data.attack_summary;
+    if (atk && atk.phases && atk.phases.length) {
+        lines.push("## MITRE ATT&CK");
+        lines.push("");
+        atk.phases.forEach(function (phase) {
+            lines.push("### " + (phase.tactic || "?") + " (" + (phase.tactic_id || "") + ")");
+            (phase.techniques || []).forEach(function (t) {
+                lines.push("- **" + (t.id || "?") + "** " + (t.name || "") +
+                           " *(confiance : " + (t.confidence || "?") + ")*");
+            });
+            lines.push("");
+        });
+        if (atk.detection_priorities && atk.detection_priorities.length) {
+            lines.push("## Priorités de détection");
+            lines.push("");
+            atk.detection_priorities.forEach(function (p) { lines.push("- " + p); });
+            lines.push("");
+        }
+    }
+    return lines.join("\n");
+}
+
+(function initCopyMarkdown() {
+    var btn = document.getElementById("btn-copy-md");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+        var md = buildMarkdown(REPORT_DATA);
+        // Fallback pour les contextes non-HTTPS où navigator.clipboard est absent
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(md)
+                .then(function () { showToast("Rapport copié en Markdown", true); })
+                .catch(function () { fallbackCopy(md); });
+        } else {
+            fallbackCopy(md);
+        }
+    });
+
+    function fallbackCopy(text) {
+        var ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+            document.execCommand("copy");
+            showToast("Rapport copié en Markdown", true);
+        } catch (e) {
+            showToast("Échec de la copie", false);
+        }
+        document.body.removeChild(ta);
+    }
+})();
+</script>
 
 </body>
 </html>

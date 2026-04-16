@@ -139,7 +139,20 @@ curl http://localhost:5000/scan/192.168.1.1 \
 http://localhost:5000/rapport/192.168.1.1
 ```
 
-Le rapport affiche : scores CVSS colorisés, visualisation du kill chain MITRE ATT&CK avec les phases actives en surbrillance, fiches techniques avec niveau de confiance, et priorités de détection.
+Le rapport affiche : scores CVSS colorisés, donut SVG de répartition des sévérités, kill chain MITRE ATT&CK cliquable (chaque phase active scroll vers sa section), fiches techniques avec niveau de confiance et mitigations, priorités de détection, filtre de recherche sur les ports, boutons export (JSON / PDF / Markdown via presse-papier), et styles d'impression dédiés.
+
+### Formats d'export
+
+```bash
+# Rapport HTML interactif (défaut)
+curl http://localhost:5000/rapport/192.168.1.1
+
+# Data JSON complète (dernier scan persisté)
+curl http://localhost:5000/rapport/192.168.1.1?format=json
+
+# PDF A4 téléchargeable (audit, archivage)
+curl http://localhost:5000/rapport/192.168.1.1?format=pdf -o rapport.pdf
+```
 
 ---
 
@@ -148,7 +161,10 @@ Le rapport affiche : scores CVSS colorisés, visualisation du kill chain MITRE A
 | Endpoint | Description | Auth |
 |---|---|---|
 | `GET /scan/<ip>` | Lance un scan sur l'IP cible | Oui (si `API_KEY` définie) |
-| `GET /rapport/<ip>` | Retourne le rapport HTML du dernier scan | Oui |
+| `GET /rapport/<ip>` | Rapport HTML (défaut) — `?format=json` ou `?format=pdf` | Oui |
+| `GET /history` | Liste synthétique des derniers scans (paramètre `limit`, défaut 100) | Oui |
+| `GET /history/<ip>` | Historique détaillé d'une IP (data complète) | Oui |
+| `GET /version` | Nom, version sémantique, hash commit | Non |
 | `GET /health` | Statut du serveur | Non |
 
 ---
@@ -168,6 +184,8 @@ cp .env.example .env
 | `REPORT_DIR` | `/app/rapports` | Dossier de sauvegarde des rapports HTML |
 | `CACHE_SIZE` | `32` | Nombre d'IPs mémorisées en cache |
 | `LOG_FILE_PATH` | `/app/logs/scan.log` | Chemin du fichier de log |
+| `HISTORY_DB_PATH` | `/app/netaudit.db` | Base SQLite de l'historique des scans |
+| `BUILD_COMMIT` | *(vide)* | Hash commit injecté au build Docker, exposé par `/version` |
 
 ---
 
@@ -191,13 +209,27 @@ cp .env.example .env
 - Mitigations concrètes proposées par technique
 - Base de données locale : 62 techniques ATT&CK, 26 CWEs, 30 services, 40 CVEs connues
 
+**Rapport & UX**
+- Rapport HTML dark-mode avec donut SVG de répartition des sévérités CVSS
+- Kill chain MITRE ATT&CK cliquable — chaque phase active scroll vers sa fiche
+- Filtre de recherche sur les ports (n°, service, version, CVE) — vanilla JS
+- Bouton « Copier en Markdown » pour coller le rapport dans Jira / PR / ticket
+- Styles d'impression dédiés (`@media print`) — URLs révélées, couleurs claires
+- Exports alternatifs : `?format=json` (data brute) et `?format=pdf` (A4 téléchargeable, généré via reportlab)
+
+**Historique & persistance**
+- Base SQLite locale — scans enregistrés à chaque `/scan/<ip>`, survit au redémarrage
+- `GET /history` — liste synthétique avec risk_level et total_vulns
+- `GET /history/<ip>` — historique détaillé d'une IP (data complète)
+
 **Sécurité & infrastructure**
-- Rapport HTML dark-mode avec visualisation kill chain interactive
+- Authentification API key — header `X-API-Key`, comparaison à temps constant via `hmac.compare_digest`
 - Rate limiting — 5 scans par minute par IP
-- Authentification API key — header `X-API-Key`, désactivable en dev
 - Protection path-traversal — accès aux rapports sécurisé
 - Gunicorn — serveur de production (remplace le serveur de dev Flask)
-- Docker-ready — image slim Python 3.11
+- Docker-ready — image slim Python 3.11, HEALTHCHECK HTTP natif
+- Endpoint `/version` — traçabilité précise de l'image déployée (version + hash commit)
+- Logs dupliqués fichier rotaté + stdout — compatibles `docker logs` et agrégateurs
 
 ---
 
@@ -208,7 +240,7 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-131 tests couvrant : validation IP, parsing Nmap XML, endpoints API, corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue de CVEs connues, déduplication, calcul de risque, génération du chemin d'attaque, intégrité du catalogue).
+163 tests couvrant : validation IP, parsing Nmap XML, endpoints API (scan, rapport, history, version, health), corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue CVEs connues, déduplication, calcul de risque, chemin d'attaque, intégrité du catalogue), persistance SQLite (insertion, lecture, filtrage), génération PDF (smoke test binaire, robustesse aux données partielles).
 
 ---
 
@@ -217,22 +249,27 @@ pytest tests/ -v
 ```
 netaudit/
 ├── src/
-│   ├── scan.py              # Moteur de scan, parsing Nmap → JSON, génération rapports
-│   ├── webapp.py            # API REST Flask (endpoints, auth, rate limiting)
+│   ├── scan.py              # Moteur de scan, parser Nmap XML, orchestration
+│   ├── webapp.py            # API REST Flask (scan, rapport, history, version, health)
 │   ├── attack_mapper.py     # Corrélation MITRE ATT&CK — techniques, chemin, risque
+│   ├── history.py           # Persistance SQLite + accès historique
+│   ├── exports.py           # Génération PDF via reportlab
+│   ├── version.py           # Version sémantique + hash commit
 │   ├── data/
 │   │   ├── techniques.json       # 62 techniques ATT&CK (détection + mitigations)
 │   │   ├── service_mapping.json  # 30 services → techniques (confiance haute)
 │   │   ├── cwe_mapping.json      # 26 CWEs → techniques
 │   │   └── known_cves.json       # 40 CVEs célèbres → CWE (mapping précis)
 │   └── templates/
-│       └── rapport.html     # Template Jinja2 — dark-mode, kill chain, fiches ATT&CK
+│       └── rapport.html     # Template Jinja2 — dark-mode, donut, kill chain, filtre, export MD
 ├── tests/
-│   ├── test_scan.py         # Tests — validation IP, parsing Nmap
-│   ├── test_webapp.py       # Tests — endpoints API, auth, erreurs
-│   └── test_attack_mapper.py # Tests — corrélation ATT&CK (57 cas)
+│   ├── test_scan.py         # Validation IP, parsing Nmap XML
+│   ├── test_webapp.py       # Endpoints API, auth, formats d'export, historique
+│   ├── test_attack_mapper.py # Corrélation ATT&CK (81 cas)
+│   ├── test_history.py      # Persistance SQLite (14 cas)
+│   └── test_exports.py      # Génération PDF (6 cas)
 ├── .env.example             # Modèle de configuration
-├── Dockerfile               # Image slim Python 3.11 + Nmap, Gunicorn
+├── Dockerfile               # Image slim Python 3.11 + Nmap, Gunicorn, HEALTHCHECK
 └── requirements.txt         # Dépendances avec versions fixées
 ```
 
