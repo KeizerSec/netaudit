@@ -64,13 +64,18 @@ Vous donnez une IP  →  NetAudit lance Nmap + Vulners  →  Vous obtenez :
   • Score de posture 0–100 → grade A/B/C/D/F, comparable dans le temps
   • 100 % local — aucune dépendance réseau, déterministe
 
-  Couche 6 — Rapport & exports
-  • Rapport HTML dark-mode : donut CVSS, kill chain cliquable, filtre ports
-  • Export JSON brut pour intégration outils tiers
+  Couche 5 — Rapport & exports
+  • Rapport HTML dark-mode : donut CVSS, kill chain cliquable, filtre ports,
+    meta-cards Rôle + Posture (grade + jauge), bloc Top priorités d'action,
+    section Posture & recommandations avec findings colorisés par sévérité
+  • Export JSON brut pour intégration outils tiers (expose priority_summary
+    et context en plus de l'attack_summary)
   • Export PDF A4 généré via reportlab — archivage, audit, rapport formel
+    (en-tête + table posture + synthèse ATT&CK + table ports)
   • Bouton « Copier en Markdown » pour ticket / PR / rapport d'incident
+    (inclut priorités + findings posture + reco)
 
-  Couche 7 — Historique & observabilité
+  Couche 6 — Historique & observabilité
   • Persistance SQLite — chaque scan survit au redémarrage
   • Endpoints /history et /history/<ip> pour suivi de tendances
   • /version — traçabilité de l'image déployée (semver + hash commit)
@@ -232,7 +237,7 @@ curl http://localhost:5000/rapport/192.168.1.1?format=json
 curl -OJ http://localhost:5000/rapport/192.168.1.1?format=pdf
 ```
 
-Le rapport HTML affiche : donut SVG des sévérités CVSS, kill chain MITRE ATT&CK cliquable (chaque phase active scroll vers sa fiche), fiches techniques colorisées par confiance avec détection et mitigations, priorités de détection SIEM, filtre de recherche sur les ports, boutons d'export (JSON / PDF / Markdown presse-papier), styles d'impression dédiés.
+Le rapport HTML affiche : meta-cards synthétiques (IP, date, ports, donut CVSS, rôle inféré, priorité max KEV/ransomware, grade de posture + jauge 0–100), bloc « Top priorités d'action » basé sur le score combiné CVSS + KEV + EPSS, section « Posture & recommandations » avec findings colorisés par sévérité (titre + description + reco concrète + evidence), badges KEV / RANSOM / priorité et score EPSS par CVE dans le tableau des ports, kill chain MITRE ATT&CK cliquable (chaque phase active scroll vers sa fiche), fiches techniques colorisées par confiance avec détection et mitigations, priorités de détection SIEM, filtre de recherche sur les ports, boutons d'export (JSON / PDF / Markdown presse-papier), styles d'impression dédiés.
 
 ### Consulter l'historique
 
@@ -345,11 +350,15 @@ cp .env.example .env
 
 **Rapport & UX**
 - Rapport HTML dark-mode avec donut SVG de répartition des sévérités CVSS
+- Meta-cards synthétiques : IP, date, ports, vulnérabilités, **rôle détecté + confiance**, **priorité max + KEV/ransomware count**, **grade de posture (A–F) + jauge 0–100**
+- Bloc « Top priorités d'action » en tête du rapport — 5 CVEs les plus urgentes selon le score combiné (CVSS + KEV + EPSS + ransomware)
+- Section « Posture & recommandations » — findings triés par sévérité, chaque carte expose description + recommandation concrète + evidence
+- Badges KEV / RANSOM / priorité (IMMEDIATE/HIGH/…) et score EPSS affichés à côté de chaque CVE dans le tableau des ports
 - Kill chain MITRE ATT&CK cliquable — chaque phase active scroll vers sa fiche
 - Filtre de recherche sur les ports (n°, service, version, CVE) — vanilla JS
-- Bouton « Copier en Markdown » pour coller le rapport dans Jira / PR / ticket
+- Bouton « Copier en Markdown » — rapport complet (priorités + posture + ATT&CK + ports) prêt à coller dans Jira / PR / ticket
 - Styles d'impression dédiés (`@media print`) — URLs révélées, couleurs claires
-- Exports alternatifs : `?format=json` (data brute) et `?format=pdf` (A4 téléchargeable, généré via reportlab)
+- Exports alternatifs : `?format=json` (data brute avec priority_summary et context) et `?format=pdf` (A4 téléchargeable, généré via reportlab, section posture incluse)
 
 **Historique & persistance**
 - Base SQLite locale — scans enregistrés à chaque `/scan/<ip>`, survit au redémarrage
