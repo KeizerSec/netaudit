@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import subprocess
 import ipaddress
 import logging
 import os
-import re
+import shutil
+import xml.etree.ElementTree as ET
 from functools import lru_cache
 from logging.handlers import RotatingFileHandler
-import shutil
 from datetime import datetime, timezone
 
 # Répertoire absolu de ce fichier (src/)
@@ -49,95 +51,137 @@ def valider_ip(ip: str) -> bool:
         return False
 
 
-def parser_nmap_output(ip: str, raw: str) -> dict:
+def _empty_result(ip: str, raw: str) -> dict:
+    """Squelette de résultat pour un hôte injoignable ou un parse échoué."""
+    return {
+        "ip":          ip,
+        "scan_date":   datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "host_up":     False,
+        "hostname":    "",
+        "os_guess":    "",
+        "ports":       [],
+        "total_vulns": 0,
+        "raw":         raw,
+    }
+
+
+def _extract_service_version(service_elem: ET.Element | None) -> tuple[str, str]:
+    """Retourne (nom_service, version_lisible) depuis un élément <service>."""
+    if service_elem is None:
+        return "", ""
+    name = service_elem.get("name", "")
+    parts = [
+        service_elem.get(attr, "").strip()
+        for attr in ("product", "version", "extrainfo")
+    ]
+    version = " ".join(p for p in parts if p)
+    return name, version
+
+
+def _extract_vulners(port_elem: ET.Element) -> list[dict]:
+    """Extrait les vulnérabilités de tous les blocs <script id="vulners"> du port."""
+    vulns: list[dict] = []
+    for script in port_elem.findall("script"):
+        if script.get("id") != "vulners":
+            continue
+        # La structure vulners expose des tables imbriquées :
+        # <script>  <table key="cpe:..."> <table> <elem key="id">CVE-…</elem> …
+        for cpe_table in script.findall("table"):
+            for vuln_table in cpe_table.findall("table"):
+                elems = {
+                    e.get("key"): (e.text or "").strip()
+                    for e in vuln_table.findall("elem")
+                }
+                vuln_id = elems.get("id", "")
+                if not vuln_id or vuln_id.startswith("cpe:"):
+                    continue
+                try:
+                    score = float(elems.get("cvss", "0") or 0)
+                except ValueError:
+                    score = 0.0
+                vuln_type = (elems.get("type") or "cve").lower()
+                vulns.append({
+                    "id":    vuln_id,
+                    "score": score,
+                    "url":   f"https://vulners.com/{vuln_type}/{vuln_id}",
+                })
+    return vulns
+
+
+def parser_nmap_xml(ip: str, xml_str: str) -> dict:
     """
-    Transforme la sortie brute de Nmap en dict structuré.
+    Parse la sortie Nmap XML (`-oX -`) en dict structuré.
 
     Structure retournée :
     {
-        "ip": str,
-        "scan_date": str (ISO-8601 UTC),
-        "host_up": bool,
+        "ip":          str,
+        "scan_date":   str (UTC),
+        "host_up":     bool,
+        "hostname":    str,              # reverse DNS si dispo
+        "os_guess":    str,              # meilleur match OS si dispo
         "ports": [
             {
-                "port": int,
+                "port":     int,
                 "protocol": str,
-                "state": str,
-                "service": str,
-                "version": str,
-                "vulns": [
-                    {"id": str, "score": float, "url": str}
-                ]
+                "state":    str,
+                "service":  str,
+                "version":  str,
+                "vulns":    [{"id": str, "score": float, "url": str}]
             }
         ],
         "total_vulns": int,
-        "raw": str
+        "raw":         str               # XML brut, conservé pour audit
     }
+
+    En cas de XML malformé ou d'hôte injoignable, retourne une structure vide
+    cohérente (jamais d'exception à la surface).
     """
-    result: dict = {
-        "ip":         ip,
-        "scan_date":  datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
-        "host_up":    False,
-        "ports":      [],
-        "total_vulns": 0,
-        "raw":        raw,
-    }
+    result = _empty_result(ip, xml_str)
 
-    if "Host is up" in raw:
-        result["host_up"] = True
-
-    # Hôte injoignable → retour anticipé
-    if "Host seems down" in raw or "0 hosts up" in raw:
+    try:
+        root = ET.fromstring(xml_str)
+    except ET.ParseError as exc:
+        logging.warning("XML Nmap invalide pour %s : %s", ip, exc)
         return result
 
-    # Regex ligne de port : "22/tcp open  ssh  OpenSSH 7.6 ..."
-    port_re = re.compile(
-        r'^(\d+)/(tcp|udp)\s+(\w+)\s+(\S+)\s*(.*)$',
-        re.MULTILINE,
-    )
-    # Regex ligne vulners : "|   CVE-2021-28041  7.8  https://..."
-    vuln_re = re.compile(
-        r'^\|\s+([\w:.\-]+)\s+([\d.]+)\s+(https?://\S+)',
-        re.MULTILINE,
-    )
+    host = root.find("host")
+    if host is None:
+        return result
 
-    port_data: dict[int, dict] = {}
-    port_order: list[int] = []
+    status = host.find("status")
+    if status is not None and status.get("state") == "up":
+        result["host_up"] = True
 
-    # 1re passe : collecter les ports
-    for m in port_re.finditer(raw):
-        port_num = int(m.group(1))
-        port_data[port_num] = {
-            "port":     port_num,
-            "protocol": m.group(2),
-            "state":    m.group(3),
-            "service":  m.group(4),
-            "version":  m.group(5).strip(),
-            "vulns":    [],
-        }
-        port_order.append(port_num)
+    hostname = host.find("./hostnames/hostname")
+    if hostname is not None:
+        result["hostname"] = hostname.get("name", "")
 
-    # 2e passe : associer les vulnérabilités au dernier port rencontré
-    current_port: int | None = None
-    for line in raw.splitlines():
-        pm = port_re.match(line.strip())
-        if pm:
-            current_port = int(pm.group(1))
+    osmatch = host.find("./os/osmatch")
+    if osmatch is not None:
+        result["os_guess"] = osmatch.get("name", "")
+
+    for port_elem in host.findall("./ports/port"):
+        state_elem = port_elem.find("state")
+        state = state_elem.get("state", "") if state_elem is not None else ""
+
+        service_name, service_version = _extract_service_version(
+            port_elem.find("service")
+        )
+
+        try:
+            port_num = int(port_elem.get("portid", "0"))
+        except ValueError:
             continue
 
-        vm = vuln_re.match(line.strip())
-        if vm and current_port is not None and current_port in port_data:
-            vuln_id = vm.group(1)
-            # Ignorer les entrées de métadonnées CPE et NMAP
-            if re.match(r"^(cpe:|NMAP)", vuln_id):
-                continue
-            port_data[current_port]["vulns"].append({
-                "id":    vuln_id,
-                "score": float(vm.group(2)),
-                "url":   vm.group(3),
-            })
+        result["ports"].append({
+            "port":     port_num,
+            "protocol": port_elem.get("protocol", ""),
+            "state":    state,
+            "service":  service_name,
+            "version":  service_version,
+            "vulns":    _extract_vulners(port_elem),
+        })
 
-    result["ports"] = [port_data[p] for p in port_order]
     result["total_vulns"] = sum(len(p["vulns"]) for p in result["ports"])
     return result
 
@@ -145,20 +189,20 @@ def parser_nmap_output(ip: str, raw: str) -> dict:
 @lru_cache(maxsize=CACHE_SIZE)
 def _scan_cached(ip: str) -> dict:
     """
-    Exécute Nmap et retourne le résultat parsé.
+    Exécute Nmap avec sortie XML et retourne le résultat parsé.
     Les exceptions levées ici ne sont PAS mises en cache par lru_cache,
     ce qui garantit qu'un échec relancera un vrai scan à la prochaine tentative.
     """
     logging.info("Scan démarré pour %s", ip)
     proc = subprocess.run(
-        ["nmap", "--script", "vulners", "-sV", ip],
+        ["nmap", "--script", "vulners", "-sV", "-oX", "-", ip],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         timeout=NMAP_TIMEOUT,
         check=True,
     )
     logging.info("Scan terminé pour %s", ip)
-    return parser_nmap_output(ip, proc.stdout.decode())
+    return parser_nmap_xml(ip, proc.stdout.decode())
 
 
 def scan_vulnerabilites(ip: str) -> dict:
@@ -170,17 +214,15 @@ def scan_vulnerabilites(ip: str) -> dict:
         return _scan_cached(ip)
     except subprocess.TimeoutExpired:
         logging.error("Scan expiré pour %s", ip)
-        return {
-            "ip": ip, "error": "Timeout — le scan a expiré.",
-            "host_up": False, "ports": [], "total_vulns": 0, "raw": "",
-        }
+        err = _empty_result(ip, "")
+        err["error"] = "Timeout — le scan a expiré."
+        return err
     except subprocess.CalledProcessError as exc:
         msg = exc.stderr.decode().strip()
         logging.error("Erreur Nmap pour %s : %s", ip, msg)
-        return {
-            "ip": ip, "error": f"Erreur Nmap : {msg}",
-            "host_up": False, "ports": [], "total_vulns": 0, "raw": "",
-        }
+        err = _empty_result(ip, "")
+        err["error"] = f"Erreur Nmap : {msg}"
+        return err
 
 
 def sauvegarder_rapport(ip: str, data: dict) -> str:

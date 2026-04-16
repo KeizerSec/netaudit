@@ -523,9 +523,13 @@
 
 <!-- ── Header ─────────────────────────────────────────────── -->
 <header>
-    <span class="logo">Scan Vulnérabilité Pro</span>
+    <span class="logo">NetAudit</span>
     <span class="separator">|</span>
     <span class="target-ip">{{ data.ip }}</span>
+    {% if data.hostname %}
+        <span class="separator">·</span>
+        <span class="target-ip" style="font-size:0.95rem; color: var(--muted);">{{ data.hostname }}</span>
+    {% endif %}
     {% if data.host_up %}
         <span class="badge badge-up">Host Up</span>
     {% else %}
@@ -555,6 +559,12 @@
             <div class="value" style="color: var(--green);">0</div>
         {% endif %}
     </div>
+    {% if data.os_guess %}
+    <div class="meta-card">
+        <label>OS détecté</label>
+        <div class="value" style="font-size:0.9rem;">{{ data.os_guess }}</div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- ── Erreur éventuelle ───────────────────────────────────── -->
@@ -704,7 +714,7 @@
 <!-- ── Sortie brute Nmap (repliable) ──────────────────────── -->
 {% if data.raw %}
 <details>
-    <summary>Sortie brute Nmap</summary>
+    <summary>Sortie brute Nmap (XML)</summary>
     <div class="raw-block">
         <pre>{{ data.raw }}</pre>
     </div>
