@@ -4,9 +4,10 @@
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 ![Flask](https://img.shields.io/badge/Flask-REST_API-000000?style=for-the-badge&logo=flask&logoColor=white)
 ![Nmap](https://img.shields.io/badge/Nmap-Vulners-4682B4?style=for-the-badge&logoColor=white)
+![MITRE ATT&CK](https://img.shields.io/badge/MITRE_ATT%26CK-Correlation-E8001D?style=for-the-badge&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)
 
-**Scanner de vulnérabilités réseau** — donne une IP, reçoit un rapport JSON structuré avec les CVEs détectées par service, et un rapport HTML dark-mode prêt à lire.
+**Scanner de vulnérabilités réseau avec corrélation MITRE ATT&CK** — donnez une IP, recevez un rapport JSON structuré avec les CVEs détectées et leur traduction en techniques d'attaque concrètes, un chemin d'attaque hypothétique ordonné par kill chain, et un niveau de risque global (CRITICAL / HIGH / MEDIUM / LOW).
 
 > **Usage légal uniquement.** Ne scannez que des hôtes sur lesquels vous avez une autorisation explicite.
 
@@ -16,10 +17,21 @@
 
 ```
 Vous donnez une IP  →  NetAudit lance Nmap + Vulners  →  Vous obtenez :
-  • Une liste des ports ouverts avec services et versions
-  • Les CVEs détectées avec leur score CVSS (gravité)
-  • Un lien vers chaque vulnérabilité sur vulners.com
-  • Un rapport HTML dark-mode consultable dans le navigateur
+
+  Couche 1 — Inventaire
+  • Ports ouverts avec services et versions détectées
+  • CVEs associées avec leur score CVSS et un lien de référence
+
+  Couche 2 — Corrélation MITRE ATT&CK (nouveau)
+  • Chaque service → techniques d'attaque liées (confiance haute)
+  • Chaque CVE → techniques d'exploitation probables selon le score CVSS
+  • Un chemin d'attaque hypothétique ordonné selon le kill chain MITRE
+  • Un niveau de risque global : CRITICAL / HIGH / MEDIUM / LOW
+  • Jusqu'à 5 priorités de détection concrètes
+
+  Couche 3 — Rapport visuel
+  • Rapport HTML dark-mode avec visualisation du kill chain
+  • Fiches techniques colorisées selon le niveau de confiance
 ```
 
 ---
@@ -46,10 +58,15 @@ docker run -p 5000:5000 -e API_KEY=votre_cle_secrete netaudit
 ### Option 2 — Local (Python 3.11+ et Nmap requis)
 
 ```bash
-# 1. Installer les dépendances
+# 1. Installer Nmap sur votre système
+#    macOS  : brew install nmap
+#    Ubuntu : sudo apt install nmap
+#    Windows: https://nmap.org/download.html
+
+# 2. Installer les dépendances Python
 pip install -r requirements.txt
 
-# 2. Lancer le serveur depuis src/
+# 3. Lancer le serveur depuis src/
 cd src
 gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 360 webapp:app
 ```
@@ -69,43 +86,60 @@ curl http://localhost:5000/scan/192.168.1.1 \
      -H "X-API-Key: votre_cle_secrete"
 ```
 
-### Exemple de réponse
+### Exemple de réponse (extrait)
 
 ```json
 {
   "status": "ok",
   "ip": "192.168.1.1",
   "host_up": true,
-  "scan_date": "2024-01-01 12:00:00 UTC",
   "total_vulns": 3,
   "ports": [
     {
       "port": 22,
-      "protocol": "tcp",
-      "state": "open",
       "service": "ssh",
       "version": "OpenSSH 7.6p1",
       "vulns": [
         {
           "id": "CVE-2021-28041",
           "score": 7.8,
-          "url": "https://vulners.com/cve/CVE-2021-28041"
+          "url": "https://vulners.com/cve/CVE-2021-28041",
+          "attack_techniques": [
+            { "id": "T1078", "name": "Valid Accounts", "confidence": "medium" },
+            { "id": "T1068", "name": "Exploitation for Privilege Escalation", "confidence": "medium" }
+          ]
         }
+      ],
+      "service_techniques": [
+        { "id": "T1021.004", "name": "SSH", "confidence": "high" }
       ]
     }
   ],
+  "attack_summary": {
+    "risk_level": "HIGH",
+    "phases_count": 4,
+    "phases": [
+      {
+        "tactic": "Initial Access",
+        "techniques": [ { "id": "T1190", "confidence": "high" } ]
+      }
+    ],
+    "detection_priorities": [
+      "Surveiller les tentatives de connexion SSH répétées",
+      "Alerter sur les connexions depuis des plages IP inhabituelles"
+    ]
+  },
   "rapport_html": "/rapport/192.168.1.1"
 }
 ```
 
 ### Consulter le rapport HTML
 
-Ouvrez dans votre navigateur :
 ```
 http://localhost:5000/rapport/192.168.1.1
 ```
 
-Le rapport affiche les ports, services, et vulnérabilités avec les scores CVSS colorisés (vert → rouge selon la gravité).
+Le rapport affiche : scores CVSS colorisés, visualisation du kill chain MITRE ATT&CK avec les phases actives en surbrillance, fiches techniques avec niveau de confiance, et priorités de détection.
 
 ---
 
@@ -139,16 +173,27 @@ cp .env.example .env
 
 ## Fonctionnalités
 
-- **Scan Nmap + Vulners** — détection des CVEs par service et version
-- **Parsing structuré** — sortie Nmap convertie en JSON propre (ports, services, vulnérabilités)
-- **Rapport HTML dark-mode** — scores CVSS colorisés, sortie brute Nmap repliable
-- **Cache LRU** — évite de rescanner une même IP inutilement
-- **Rate limiting** — 5 scans par minute par IP
-- **Authentification API key** — header `X-API-Key`, désactivable en dev
-- **Validation IP robuste** — module `ipaddress` (IPv4 + IPv6, résiste aux injections)
-- **Protection path-traversal** — accès aux rapports sécurisé
-- **Gunicorn** — serveur de production (remplace le serveur de dev Flask)
-- **Docker-ready** — image slim Python 3.11, variables d'env configurables
+**Scan réseau**
+- Nmap + script Vulners — détection des CVEs par service et version
+- Parsing structuré — sortie Nmap convertie en JSON propre
+- Validation IP robuste — module `ipaddress` (IPv4 + IPv6, résiste aux injections)
+- Cache LRU — évite de rescanner une même IP inutilement
+
+**Corrélation MITRE ATT&CK**
+- Mapping service/port → techniques (confiance haute, 30 services couverts)
+- Mapping CVE → techniques via heuristique CVSS + contexte service
+- Chemin d'attaque hypothétique ordonné selon le kill chain MITRE (11 phases)
+- Calcul du niveau de risque global : CRITICAL / HIGH / MEDIUM / LOW
+- 5 priorités de détection extraites automatiquement
+- Base de données locale : 29 techniques, 26 CWEs, 30 services mappés
+
+**Sécurité & infrastructure**
+- Rapport HTML dark-mode avec visualisation kill chain interactive
+- Rate limiting — 5 scans par minute par IP
+- Authentification API key — header `X-API-Key`, désactivable en dev
+- Protection path-traversal — accès aux rapports sécurisé
+- Gunicorn — serveur de production (remplace le serveur de dev Flask)
+- Docker-ready — image slim Python 3.11
 
 ---
 
@@ -159,7 +204,7 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-45 tests couvrant la validation IP, le parsing Nmap, et tous les endpoints de l'API.
+102 tests couvrant : validation IP, parsing Nmap, endpoints API, corrélation ATT&CK (service mapping, CVE mapping, déduplication, calcul de risque, génération du chemin d'attaque).
 
 ---
 
@@ -170,11 +215,17 @@ netaudit/
 ├── src/
 │   ├── scan.py              # Moteur de scan, parsing Nmap → JSON, génération rapports
 │   ├── webapp.py            # API REST Flask (endpoints, auth, rate limiting)
+│   ├── attack_mapper.py     # Corrélation MITRE ATT&CK — techniques, chemin, risque
+│   ├── data/
+│   │   ├── techniques.json  # Catalogue de 29 techniques ATT&CK avec détections
+│   │   ├── service_mapping.json  # 30 services → techniques (confiance haute)
+│   │   └── cwe_mapping.json     # 26 CWEs → techniques (confiance moyenne)
 │   └── templates/
-│       └── rapport.html     # Template HTML Jinja2 (dark-mode, CVSS colorisés)
+│       └── rapport.html     # Template Jinja2 — dark-mode, kill chain, fiches ATT&CK
 ├── tests/
-│   ├── test_scan.py         # Tests unitaires — validation IP, parsing Nmap
-│   └── test_webapp.py       # Tests unitaires — endpoints API, auth, erreurs
+│   ├── test_scan.py         # Tests — validation IP, parsing Nmap
+│   ├── test_webapp.py       # Tests — endpoints API, auth, erreurs
+│   └── test_attack_mapper.py # Tests — corrélation ATT&CK (57 cas)
 ├── .env.example             # Modèle de configuration
 ├── Dockerfile               # Image slim Python 3.11 + Nmap, Gunicorn
 └── requirements.txt         # Dépendances avec versions fixées
@@ -185,7 +236,8 @@ netaudit/
 ## Limitations
 
 > NetAudit est un outil d'audit rapide et d'apprentissage.
-> Il ne remplace pas des solutions professionnelles comme Nessus ou OpenVAS.
+> La corrélation ATT&CK est heuristique (basée sur le score CVSS et le service) — elle donne des pistes, pas des certitudes.
+> Il ne remplace pas des solutions professionnelles comme Nessus, OpenVAS, ou une analyse manuelle des CVEs.
 
 ---
 
