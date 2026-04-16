@@ -651,10 +651,11 @@
     <!-- Kill chain visuelle ─────────────────────── -->
     <div class="killchain">
         {% set kc_all = [
+            ("TA0043","Recon"),("TA0042","Resource Dev."),
             ("TA0001","Initial Access"),("TA0002","Execution"),("TA0003","Persistence"),
             ("TA0004","Privilege Esc."),("TA0005","Defense Evasion"),("TA0006","Credential Access"),
             ("TA0007","Discovery"),("TA0008","Lateral Movement"),("TA0009","Collection"),
-            ("TA0040","Impact")
+            ("TA0011","C2"),("TA0010","Exfiltration"),("TA0040","Impact")
         ] %}
         {% set active_tactics = atk.phases | map(attribute='tactic_id') | list %}
         {% for tactic_id, tactic_short in kc_all %}
@@ -688,6 +689,11 @@
                 {% if tech.detection %}
                 <div class="tech-detection">
                     <span class="detection-label">Détection :</span> {{ tech.detection }}
+                </div>
+                {% endif %}
+                {% if tech.mitigations %}
+                <div class="tech-detection">
+                    <span class="detection-label" style="color: var(--green);">Mitigation :</span> {{ tech.mitigations }}
                 </div>
                 {% endif %}
             </div>

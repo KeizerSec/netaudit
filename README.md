@@ -181,11 +181,15 @@ cp .env.example .env
 
 **Corrélation MITRE ATT&CK**
 - Mapping service/port → techniques (confiance haute, 30 services couverts)
-- Mapping CVE → techniques via heuristique CVSS + contexte service
-- Chemin d'attaque hypothétique ordonné selon le kill chain MITRE (11 phases)
+- Mapping CVE → techniques en trois couches complémentaires :
+  - Catalogue de CVEs célèbres (Log4Shell, EternalBlue, Heartbleed, …) → CWE → techniques précises
+  - Mapping CWE → techniques (26 CWEs cataloguées)
+  - Heuristique CVSS + contexte service en filet de sécurité
+- Chemin d'attaque hypothétique ordonné selon le kill chain MITRE complet (14 tactiques)
 - Calcul du niveau de risque global : CRITICAL / HIGH / MEDIUM / LOW
 - 5 priorités de détection extraites automatiquement
-- Base de données locale : 29 techniques, 26 CWEs, 30 services mappés
+- Mitigations concrètes proposées par technique
+- Base de données locale : 62 techniques ATT&CK, 26 CWEs, 30 services, 40 CVEs connues
 
 **Sécurité & infrastructure**
 - Rapport HTML dark-mode avec visualisation kill chain interactive
@@ -204,7 +208,7 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-102 tests couvrant : validation IP, parsing Nmap, endpoints API, corrélation ATT&CK (service mapping, CVE mapping, déduplication, calcul de risque, génération du chemin d'attaque).
+131 tests couvrant : validation IP, parsing Nmap XML, endpoints API, corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue de CVEs connues, déduplication, calcul de risque, génération du chemin d'attaque, intégrité du catalogue).
 
 ---
 
@@ -217,9 +221,10 @@ netaudit/
 │   ├── webapp.py            # API REST Flask (endpoints, auth, rate limiting)
 │   ├── attack_mapper.py     # Corrélation MITRE ATT&CK — techniques, chemin, risque
 │   ├── data/
-│   │   ├── techniques.json  # Catalogue de 29 techniques ATT&CK avec détections
+│   │   ├── techniques.json       # 62 techniques ATT&CK (détection + mitigations)
 │   │   ├── service_mapping.json  # 30 services → techniques (confiance haute)
-│   │   └── cwe_mapping.json     # 26 CWEs → techniques (confiance moyenne)
+│   │   ├── cwe_mapping.json      # 26 CWEs → techniques
+│   │   └── known_cves.json       # 40 CVEs célèbres → CWE (mapping précis)
 │   └── templates/
 │       └── rapport.html     # Template Jinja2 — dark-mode, kill chain, fiches ATT&CK
 ├── tests/

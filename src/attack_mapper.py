@@ -46,6 +46,8 @@ except FileNotFoundError as exc:
 # ─── Ordre du kill chain MITRE (tactic_id → position) ───────────────────────
 
 _KILL_CHAIN: list[tuple[str, str]] = [
+    ("TA0043", "Reconnaissance"),
+    ("TA0042", "Resource Development"),
     ("TA0001", "Initial Access"),
     ("TA0002", "Execution"),
     ("TA0003", "Persistence"),
@@ -55,6 +57,7 @@ _KILL_CHAIN: list[tuple[str, str]] = [
     ("TA0007", "Discovery"),
     ("TA0008", "Lateral Movement"),
     ("TA0009", "Collection"),
+    ("TA0011", "Command and Control"),
     ("TA0010", "Exfiltration"),
     ("TA0040", "Impact"),
 ]
@@ -63,6 +66,8 @@ _TACTIC_ORDER = {tid: i for i, (tid, _) in enumerate(_KILL_CHAIN)}
 
 # Narratives par tactique — explications lisibles pour chaque phase
 _TACTIC_NARRATIVES: dict[str, str] = {
+    "TA0043": "Phase de reconnaissance active ou passive — un attaquant collecte des informations sur la surface exposée.",
+    "TA0042": "Préparation d'outils et d'infrastructure offensive (exploits, domaines, certificats) avant campagne.",
     "TA0001": "Point d'entrée probable identifié — un attaquant peut accéder au système via les services exposés.",
     "TA0002": "Exécution de code possible si un accès initial est obtenu (RCE, shell interactif).",
     "TA0003": "Mécanismes de persistence envisageables pour maintenir l'accès après redémarrage.",
@@ -72,6 +77,7 @@ _TACTIC_NARRATIVES: dict[str, str] = {
     "TA0007": "Reconnaissance interne envisageable pour cartographier le réseau après compromission.",
     "TA0008": "Propagation latérale possible vers d'autres machines du réseau.",
     "TA0009": "Collecte de données sensibles accessible depuis les services exposés.",
+    "TA0011": "Canal de commande & contrôle potentiel via les protocoles sortants autorisés (HTTP/HTTPS/DNS).",
     "TA0010": "Exfiltration de données envisageable via les canaux réseau ouverts.",
     "TA0040": "Impact final possible — destruction, chiffrement (ransomware) ou déni de service.",
 }
@@ -91,6 +97,7 @@ def _get_technique(tech_id: str) -> dict:
         "tactic_name": "Unknown",
         "description": "",
         "detection": "",
+        "mitigations": "",
         "url": f"https://attack.mitre.org/techniques/{tech_id.replace('.', '/')}/"
     }
 
@@ -105,6 +112,7 @@ def _build_technique_entry(tech_id: str, confidence: str, source: str) -> dict:
         "tactic_name":  t["tactic_name"],
         "description":  t["description"],
         "detection":    t["detection"],
+        "mitigations":  t.get("mitigations", ""),
         "url":          t["url"],
         "confidence":   confidence,   # high / medium / low
         "source":       source,       # ex : "ssh port 22" ou "CVE-2021-28041 (CVSS 7.8)"

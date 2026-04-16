@@ -20,6 +20,9 @@ from attack_mapper import (
     _generate_attack_path,
     _generate_detection_priorities,
     enrich_scan_result,
+    _TECHNIQUES,
+    _KILL_CHAIN,
+    _TACTIC_NARRATIVES,
 )
 
 
@@ -480,6 +483,52 @@ class TestGenerateAttackPath:
 
 
 # ─── Tests enrich_scan_result ─────────────────────────────────────────────────
+
+# ─── Tests d'intégrité du catalogue ATT&CK ────────────────────────────────────
+
+class TestCatalogIntegrity:
+    """Garde-fous sur techniques.json et le kill chain — détecte les régressions
+    lors de l'ajout ou du nettoyage du catalogue."""
+
+    def test_catalog_contient_au_moins_60_techniques(self):
+        assert len(_TECHNIQUES) >= 60
+
+    def test_toutes_techniques_ont_champs_obligatoires(self):
+        required = {"id", "name", "tactic_id", "tactic_name",
+                    "description", "detection", "mitigations", "url"}
+        for tid, data in _TECHNIQUES.items():
+            missing = required - set(data.keys())
+            assert not missing, f"{tid} manque {missing}"
+
+    def test_toutes_techniques_referencent_une_tactique_connue(self):
+        valid_tactics = {tid for tid, _ in _KILL_CHAIN}
+        for tid, data in _TECHNIQUES.items():
+            assert data["tactic_id"] in valid_tactics, \
+                f"{tid} référence une tactique absente du kill chain : {data['tactic_id']}"
+
+    def test_kill_chain_inclut_les_14_tactiques_standards(self):
+        expected = {"TA0043", "TA0042", "TA0001", "TA0002", "TA0003", "TA0004",
+                    "TA0005", "TA0006", "TA0007", "TA0008", "TA0009", "TA0011",
+                    "TA0010", "TA0040"}
+        actual = {tid for tid, _ in _KILL_CHAIN}
+        assert actual == expected
+
+    def test_kill_chain_ordre_recon_avant_impact(self):
+        order = [tid for tid, _ in _KILL_CHAIN]
+        assert order.index("TA0043") < order.index("TA0001")
+        assert order.index("TA0001") < order.index("TA0040")
+
+    def test_chaque_tactique_a_une_narrative(self):
+        for tid, _ in _KILL_CHAIN:
+            assert tid in _TACTIC_NARRATIVES, f"Narrative manquante pour {tid}"
+            assert len(_TACTIC_NARRATIVES[tid]) > 20
+
+    def test_mitigations_propagees_dans_entry(self):
+        # Une technique qui a des mitigations dans le catalogue doit les
+        # exposer dans le dict de sortie de _map_service_techniques
+        techs = _map_service_techniques(22, "ssh")
+        assert any(t.get("mitigations", "").strip() for t in techs)
+
 
 class TestEnrichScanResult:
 

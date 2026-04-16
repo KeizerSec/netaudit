@@ -1,4 +1,36 @@
 {
+  "T1595": {
+    "id": "T1595",
+    "name": "Active Scanning",
+    "tactic_id": "TA0043",
+    "tactic_name": "Reconnaissance",
+    "description": "Scan actif de l'infrastructure cible (ports, services, bannières) pour préparer l'exploitation.",
+    "detection": "Détecter les scans de ports depuis des IPs externes, le balayage séquentiel (sweep) et les tentatives SYN non suivies d'établissement.",
+    "mitigations": "Masquer les services non publics derrière un VPN. Configurer un firewall strict et un IDS en bordure (Suricata, Snort).",
+    "url": "https://attack.mitre.org/techniques/T1595/"
+  },
+  "T1590": {
+    "id": "T1590",
+    "name": "Gather Victim Network Information",
+    "tactic_id": "TA0043",
+    "tactic_name": "Reconnaissance",
+    "description": "Collecte passive ou active d'informations sur le réseau cible (DNS, whois, certificats, sous-domaines).",
+    "detection": "Monitorer les requêtes DNS répétées depuis des IPs étrangères, les transferts de zone (AXFR), les accès aux pages publiques listant des sous-domaines.",
+    "mitigations": "Minimiser l'exposition d'informations dans les registres publics (whois privacy). Interdire les transferts de zone DNS.",
+    "url": "https://attack.mitre.org/techniques/T1590/"
+  },
+
+  "T1588": {
+    "id": "T1588",
+    "name": "Obtain Capabilities",
+    "tactic_id": "TA0042",
+    "tactic_name": "Resource Development",
+    "description": "Acquisition d'outils d'attaque (exploits, malware, certificats volés) pour préparer une campagne ciblée.",
+    "detection": "Signal faible côté victime — s'appuyer sur la threat intelligence pour identifier les TTPs propres à un acteur et les outils qu'il emploie.",
+    "mitigations": "Durcir les systèmes (patch, EDR) pour rendre les exploits commerciaux moins efficaces. Suivre la CTI (MISP, OTX) sur les outils récemment publiés.",
+    "url": "https://attack.mitre.org/techniques/T1588/"
+  },
+
   "T1190": {
     "id": "T1190",
     "name": "Exploit Public-Facing Application",
@@ -6,6 +38,7 @@
     "tactic_name": "Initial Access",
     "description": "Exploitation d'une vulnérabilité dans une application ou un service exposé sur le réseau pour obtenir un accès initial au système.",
     "detection": "Surveiller les logs applicatifs pour des erreurs inattendues, des payloads inhabituels dans les requêtes HTTP, et les processus enfants anormaux des services web (httpd, nginx, tomcat).",
+    "mitigations": "Appliquer rapidement les correctifs de sécurité. Déployer un WAF devant les applications publiques. Segmenter les services exposés (DMZ).",
     "url": "https://attack.mitre.org/techniques/T1190/"
   },
   "T1133": {
@@ -15,6 +48,7 @@
     "tactic_name": "Initial Access",
     "description": "Utilisation d'un service d'accès à distance exposé (SSH, RDP, VPN, Citrix) pour accéder au réseau depuis l'extérieur.",
     "detection": "Monitorer les authentifications sur les services d'accès à distance. Alerter sur les connexions depuis des pays ou plages IP inhabituels, les connexions hors horaires.",
+    "mitigations": "Exiger MFA sur tous les accès distants. Restreindre les plages IP autorisées (allow-list). Ne pas exposer RDP/SSH sur Internet — passer par VPN.",
     "url": "https://attack.mitre.org/techniques/T1133/"
   },
   "T1078": {
@@ -24,8 +58,10 @@
     "tactic_name": "Initial Access",
     "description": "Utilisation de comptes légitimes compromis ou devinés pour s'authentifier sur un service exposé.",
     "detection": "Alerter sur les authentifications réussies depuis des IPs inconnues, les connexions hors horaires, les multiples échecs suivis d'un succès (credential stuffing).",
+    "mitigations": "MFA obligatoire. Rotation régulière des mots de passe. Détection de compromission via services type HaveIBeenPwned.",
     "url": "https://attack.mitre.org/techniques/T1078/"
   },
+
   "T1059": {
     "id": "T1059",
     "name": "Command and Scripting Interpreter",
@@ -33,6 +69,7 @@
     "tactic_name": "Execution",
     "description": "Exécution de commandes ou scripts via un interpréteur (bash, sh, cmd, PowerShell) pour exécuter du code arbitraire.",
     "detection": "Surveiller les processus enfants inattendus des services exposés. Alerter sur les exécutions de shell (bash, sh, cmd) spawned depuis des services réseau.",
+    "mitigations": "Désactiver les shells inutiles. Appliquer AppLocker / SELinux / AppArmor. Journaliser exhaustivement l'exécution de processus (Sysmon, auditd).",
     "url": "https://attack.mitre.org/techniques/T1059/"
   },
   "T1059.001": {
@@ -42,7 +79,18 @@
     "tactic_name": "Execution",
     "description": "Exécution de commandes via PowerShell, souvent utilisé pour télécharger des payloads ou contourner des contrôles.",
     "detection": "Surveiller les exécutions powershell.exe avec des paramètres encodés (-EncodedCommand), les téléchargements depuis powershell (IWR, WebClient).",
+    "mitigations": "Activer Constrained Language Mode. Script Block Logging obligatoire. Restreindre PowerShell aux admins (JEA).",
     "url": "https://attack.mitre.org/techniques/T1059/001/"
+  },
+  "T1059.003": {
+    "id": "T1059.003",
+    "name": "Command and Scripting Interpreter: Windows Command Shell",
+    "tactic_id": "TA0002",
+    "tactic_name": "Execution",
+    "description": "Exécution de commandes via cmd.exe, souvent employé par les malwares et les scripts post-exploitation.",
+    "detection": "Alerter sur cmd.exe enfant d'un service réseau (w3wp, sqlservr, spoolsv). Corréler avec les flags /c et /k qui portent les commandes.",
+    "mitigations": "Restreindre l'exécution de cmd.exe pour les comptes non-admin. Monitorer via Sysmon event 1.",
+    "url": "https://attack.mitre.org/techniques/T1059/003/"
   },
   "T1059.004": {
     "id": "T1059.004",
@@ -51,7 +99,18 @@
     "tactic_name": "Execution",
     "description": "Exécution de commandes via un shell Unix (bash, sh, zsh) pour exécuter du code arbitraire sur un système Linux/macOS.",
     "detection": "Surveiller les processus bash/sh spawned depuis des services réseau. Alerter sur les reverse shells (connexions sortantes depuis bash).",
+    "mitigations": "Désactiver les shells des comptes de service (/usr/sbin/nologin). Configurer auditd pour tracer les execve. SELinux en enforcing.",
     "url": "https://attack.mitre.org/techniques/T1059/004/"
+  },
+  "T1059.006": {
+    "id": "T1059.006",
+    "name": "Command and Scripting Interpreter: Python",
+    "tactic_id": "TA0002",
+    "tactic_name": "Execution",
+    "description": "Exécution de code Python pour la post-exploitation : reverse shells, tunnels, énumération.",
+    "detection": "Surveiller les invocations de python/python3 depuis des comptes de service ou des chemins inhabituels (/tmp, /dev/shm).",
+    "mitigations": "Ne pas installer d'interpréteur sur les serveurs de production quand il n'est pas requis. Restreindre l'accès aux binaires Python.",
+    "url": "https://attack.mitre.org/techniques/T1059/006/"
   },
   "T1059.007": {
     "id": "T1059.007",
@@ -60,6 +119,7 @@
     "tactic_name": "Execution",
     "description": "Exécution de code JavaScript côté client (XSS, injection) ou via Node.js côté serveur.",
     "detection": "Surveiller les Content-Security-Policy violations, analyser les logs pour les injections de scripts dans les paramètres HTTP.",
+    "mitigations": "Content Security Policy stricte. Échapper toute sortie utilisateur. Utiliser un framework avec auto-escaping (React, Vue).",
     "url": "https://attack.mitre.org/techniques/T1059/007/"
   },
   "T1203": {
@@ -69,8 +129,20 @@
     "tactic_name": "Execution",
     "description": "Exploitation d'une vulnérabilité dans une application pour exécuter du code arbitraire (buffer overflow, use-after-free).",
     "detection": "Surveiller les crashs applicatifs répétés, les core dumps. Déployer un EDR capable de détecter les shellcodes et les exploits mémoire.",
+    "mitigations": "Compiler avec ASLR, DEP, stack canaries, CFI. Sandboxer les navigateurs et lecteurs PDF. Patch rapide des clients.",
     "url": "https://attack.mitre.org/techniques/T1203/"
   },
+  "T1569": {
+    "id": "T1569",
+    "name": "System Services",
+    "tactic_id": "TA0002",
+    "tactic_name": "Execution",
+    "description": "Abus des gestionnaires de services (systemd, services.msc, launchd) pour exécuter du code avec les droits du service.",
+    "detection": "Alerter sur la création/modification de services à partir de comptes non-admin. Monitorer Event ID 7045 (Windows), ajouts dans /etc/systemd (Linux).",
+    "mitigations": "Limiter qui peut créer des services. Signature numérique obligatoire pour les binaires de service.",
+    "url": "https://attack.mitre.org/techniques/T1569/"
+  },
+
   "T1505.003": {
     "id": "T1505.003",
     "name": "Server Software Component: Web Shell",
@@ -78,6 +150,7 @@
     "tactic_name": "Persistence",
     "description": "Dépôt d'un web shell (fichier PHP/ASP/JSP malveillant) sur le serveur web pour maintenir un accès persistant.",
     "detection": "Surveiller les nouveaux fichiers dans les répertoires web (www, htdocs, webapps). Alerter sur les requêtes HTTP vers des fichiers récemment créés. Analyser le contenu des fichiers uploadés.",
+    "mitigations": "Interdire l'upload de fichiers exécutables. File Integrity Monitoring (FIM) sur les webroot. Lecture seule pour le répertoire web quand possible.",
     "url": "https://attack.mitre.org/techniques/T1505/003/"
   },
   "T1136": {
@@ -87,6 +160,7 @@
     "tactic_name": "Persistence",
     "description": "Création d'un compte utilisateur ou système pour maintenir un accès persistent au système compromis.",
     "detection": "Alerter sur la création de nouveaux comptes système, particulièrement les comptes avec des privilèges élevés. Surveiller /etc/passwd et les logs d'audit.",
+    "mitigations": "Processus formel de création de compte avec traçabilité. Auditer la création via MDE/EDR.",
     "url": "https://attack.mitre.org/techniques/T1136/"
   },
   "T1098": {
@@ -96,8 +170,40 @@
     "tactic_name": "Persistence",
     "description": "Modification de comptes existants (ajout de clés SSH, changement de mots de passe, ajout à des groupes privilégiés) pour maintenir l'accès.",
     "detection": "Surveiller les modifications des fichiers ~/.ssh/authorized_keys. Alerter sur les changements de groupe pour des comptes existants.",
+    "mitigations": "FIM sur ~/.ssh/. Revue régulière des groupes privilégiés. Alertes sur ajout à Administrators/sudo/wheel.",
     "url": "https://attack.mitre.org/techniques/T1098/"
   },
+  "T1543": {
+    "id": "T1543",
+    "name": "Create or Modify System Process",
+    "tactic_id": "TA0003",
+    "tactic_name": "Persistence",
+    "description": "Création ou modification de processus système (service Windows, daemon systemd, launchd) pour persister.",
+    "detection": "Monitorer Event 7045 (new service), 4697 (service installed). Sous Linux, surveiller /etc/systemd/system/ et /etc/init.d/.",
+    "mitigations": "FIM sur les unités systemd et le registre des services. Alerter sur ajouts hors du cycle de patch.",
+    "url": "https://attack.mitre.org/techniques/T1543/"
+  },
+  "T1547": {
+    "id": "T1547",
+    "name": "Boot or Logon Autostart Execution",
+    "tactic_id": "TA0003",
+    "tactic_name": "Persistence",
+    "description": "Insertion dans les mécanismes d'auto-démarrage (Run/RunOnce, Startup folder, cron, ~/.bashrc) pour relancer l'attaque après reboot.",
+    "detection": "Surveiller les modifications des clés de Registre Run/RunOnce, du dossier Startup, des crontabs utilisateur, et des fichiers de shell (.bashrc, .profile).",
+    "mitigations": "FIM sur les chemins d'autostart. Désactiver l'exécution de scripts à la connexion quand possible.",
+    "url": "https://attack.mitre.org/techniques/T1547/"
+  },
+  "T1574": {
+    "id": "T1574",
+    "name": "Hijack Execution Flow",
+    "tactic_id": "TA0003",
+    "tactic_name": "Persistence",
+    "description": "Détournement du flux d'exécution via DLL hijacking, LD_PRELOAD, PATH interception pour faire exécuter du code malveillant à la place du légitime.",
+    "detection": "Alerter sur les modifications de LD_PRELOAD/LD_LIBRARY_PATH. Monitorer les DLLs chargées hors de System32.",
+    "mitigations": "Signer les binaires. Bloquer les écritures utilisateur dans les répertoires de DLL système. Hardening AppLocker/WDAC.",
+    "url": "https://attack.mitre.org/techniques/T1574/"
+  },
+
   "T1068": {
     "id": "T1068",
     "name": "Exploitation for Privilege Escalation",
@@ -105,8 +211,61 @@
     "tactic_name": "Privilege Escalation",
     "description": "Exploitation d'une vulnérabilité logicielle pour obtenir des privilèges plus élevés sur le système (root, SYSTEM, Administrator).",
     "detection": "Surveiller les processus s'exécutant avec des privilèges inattendus. Alerter sur les exécutions de commandes avec sudo par des comptes inhabituels. Monitorer les appels système liés aux privilèges (setuid, setgid).",
+    "mitigations": "Patch du noyau et des composants suid/sgid. Limiter sudo aux commandes strictement nécessaires.",
     "url": "https://attack.mitre.org/techniques/T1068/"
   },
+  "T1548": {
+    "id": "T1548",
+    "name": "Abuse Elevation Control Mechanism",
+    "tactic_id": "TA0004",
+    "tactic_name": "Privilege Escalation",
+    "description": "Contournement des contrôles d'élévation (UAC bypass, sudo abuse, setuid) pour passer en mode privilégié.",
+    "detection": "Monitorer les bypass UAC connus (eventvwr, fodhelper). Alerter sur les binaires setuid modifiés récemment.",
+    "mitigations": "UAC à son maximum. Auditer régulièrement les fichiers setuid (find / -perm -4000). Principe de moindre privilège.",
+    "url": "https://attack.mitre.org/techniques/T1548/"
+  },
+  "T1055": {
+    "id": "T1055",
+    "name": "Process Injection",
+    "tactic_id": "TA0004",
+    "tactic_name": "Privilege Escalation",
+    "description": "Injection de code dans un processus légitime pour hériter de ses privilèges et contourner les contrôles axés-processus.",
+    "detection": "EDR avec détection d'injection (CreateRemoteThread, WriteProcessMemory, VirtualAllocEx). Alerter sur les handles HIGH_INTEGRITY ouverts par des processus non-admin.",
+    "mitigations": "Activer Credential Guard sur Windows. Protection contre injection via EDR (Defender ATP, Elastic, CrowdStrike).",
+    "url": "https://attack.mitre.org/techniques/T1055/"
+  },
+
+  "T1027": {
+    "id": "T1027",
+    "name": "Obfuscated Files or Information",
+    "tactic_id": "TA0005",
+    "tactic_name": "Defense Evasion",
+    "description": "Chiffrement, encodage ou obfuscation de fichiers ou de chaînes pour échapper à la détection par signature.",
+    "detection": "Alerter sur les fichiers à haute entropie dans des répertoires système. Détecter les Base64 PowerShell, les scripts minifiés, les strings packées (UPX).",
+    "mitigations": "AMSI activé sur Windows. Règles YARA à jour. EDR comportemental plutôt que signature pure.",
+    "url": "https://attack.mitre.org/techniques/T1027/"
+  },
+  "T1070": {
+    "id": "T1070",
+    "name": "Indicator Removal",
+    "tactic_id": "TA0005",
+    "tactic_name": "Defense Evasion",
+    "description": "Suppression de logs, history ou fichiers pour effacer les traces de compromission.",
+    "detection": "Alerter sur la troncature des logs (auth.log, syslog, Security.evtx). Monitorer les appels à wevtutil cl, journalctl --rotate, rm ~/.bash_history.",
+    "mitigations": "Centraliser les logs vers un SIEM en temps quasi-réel. Fichiers de log append-only (chattr +a).",
+    "url": "https://attack.mitre.org/techniques/T1070/"
+  },
+  "T1562": {
+    "id": "T1562",
+    "name": "Impair Defenses",
+    "tactic_id": "TA0005",
+    "tactic_name": "Defense Evasion",
+    "description": "Désactivation ou altération des outils de défense (AV, EDR, pare-feu) pour faciliter la suite de l'attaque.",
+    "detection": "Alerter immédiatement sur l'arrêt de services de sécurité (MDE, Defender, auditd, syslog). Watchdog qui redémarre l'EDR.",
+    "mitigations": "Protection tamper de l'EDR. Alertes de priorité critique sur l'arrêt des agents. Séparation des droits admin/sécurité.",
+    "url": "https://attack.mitre.org/techniques/T1562/"
+  },
+
   "T1110": {
     "id": "T1110",
     "name": "Brute Force",
@@ -114,6 +273,7 @@
     "tactic_name": "Credential Access",
     "description": "Tentatives répétées de deviner des identifiants par dictionnaire, password spray ou credential stuffing.",
     "detection": "Alerter sur un grand nombre d'échecs d'authentification depuis une même IP (seuil recommandé : >10 en 60s). Détecter le password spray (1 mot de passe testé sur beaucoup de comptes).",
+    "mitigations": "Lockout progressif après N échecs. CAPTCHA sur les formulaires publics. MFA obligatoire. fail2ban sur SSH/FTP.",
     "url": "https://attack.mitre.org/techniques/T1110/"
   },
   "T1552": {
@@ -123,6 +283,7 @@
     "tactic_name": "Credential Access",
     "description": "Recherche de credentials stockés en clair dans des fichiers de configuration, variables d'environnement, ou bases de données.",
     "detection": "Surveiller l'accès aux fichiers de configuration sensibles. Alerter sur les lectures de /etc/shadow, .env, config.php par des processus inattendus.",
+    "mitigations": "Secret manager (Vault, AWS Secrets). Interdire les credentials hard-codés via SAST. Scanner de repos git (trufflehog, gitleaks).",
     "url": "https://attack.mitre.org/techniques/T1552/"
   },
   "T1003": {
@@ -132,6 +293,7 @@
     "tactic_name": "Credential Access",
     "description": "Extraction de credentials depuis la mémoire du système (LSASS, /etc/shadow, SAM database) pour réutilisation ou mouvement latéral.",
     "detection": "Alerter sur l'accès au processus LSASS (Windows) ou à /etc/shadow (Linux). Surveiller l'utilisation d'outils connus (mimikatz, secretsdump).",
+    "mitigations": "Credential Guard. LSA Protection (RunAsPPL). Restreindre les droits DEBUG. Désactiver WDigest.",
     "url": "https://attack.mitre.org/techniques/T1003/"
   },
   "T1040": {
@@ -141,8 +303,30 @@
     "tactic_name": "Credential Access",
     "description": "Capture du trafic réseau en clair pour extraire des credentials ou des données sensibles (Telnet, FTP, HTTP).",
     "detection": "Détecter les interfaces réseau en mode promiscuous. Alerter sur l'utilisation de tcpdump/Wireshark par des comptes non-root.",
+    "mitigations": "Chiffrer tout le trafic interne (TLS, IPSec). Segmenter le réseau. Désactiver les protocoles en clair (Telnet, FTP, HTTP interne).",
     "url": "https://attack.mitre.org/techniques/T1040/"
   },
+  "T1555": {
+    "id": "T1555",
+    "name": "Credentials from Password Stores",
+    "tactic_id": "TA0006",
+    "tactic_name": "Credential Access",
+    "description": "Extraction de credentials depuis les gestionnaires de mots de passe (navigateur, KeePass, Keychain) des utilisateurs compromis.",
+    "detection": "Alerter sur l'accès aux fichiers *.kdbx, Login Data (Chrome), Keychain par des processus inhabituels.",
+    "mitigations": "Gestionnaire de mots de passe d'entreprise avec MFA. Chiffrement de la base verrouillée hors usage.",
+    "url": "https://attack.mitre.org/techniques/T1555/"
+  },
+  "T1556": {
+    "id": "T1556",
+    "name": "Modify Authentication Process",
+    "tactic_id": "TA0006",
+    "tactic_name": "Credential Access",
+    "description": "Altération du processus d'authentification (PAM, Netlogon, GINA) pour capturer les identifiants en transit ou ajouter une backdoor.",
+    "detection": "FIM sur /etc/pam.d/, %SystemRoot%\\System32\\lsass.exe dependencies. Alerter sur les DLLs d'auth non signées.",
+    "mitigations": "Signatures obligatoires sur les modules d'authentification. Audit régulier des modules PAM chargés.",
+    "url": "https://attack.mitre.org/techniques/T1556/"
+  },
+
   "T1082": {
     "id": "T1082",
     "name": "System Information Discovery",
@@ -150,6 +334,7 @@
     "tactic_name": "Discovery",
     "description": "Collecte d'informations sur le système cible : version OS, matériel, configurations, utilisateurs connectés.",
     "detection": "Surveiller l'exécution de commandes de découverte système (uname, systeminfo, whoami, id, hostname) depuis des comptes inhabituels.",
+    "mitigations": "Peu mitigable — monitorer plutôt que bloquer. Limiter la surface d'information via des comptes à faible privilège.",
     "url": "https://attack.mitre.org/techniques/T1082/"
   },
   "T1083": {
@@ -159,6 +344,7 @@
     "tactic_name": "Discovery",
     "description": "Enumération des fichiers et répertoires du système pour découvrir des données sensibles ou des vecteurs d'exploitation.",
     "detection": "Alerter sur la lecture massive de répertoires sensibles (/etc, /home, /var/www). Surveiller les accès à des fichiers de configuration.",
+    "mitigations": "Droits minimaux sur les répertoires sensibles. Audit des accès via auditd/File Screens.",
     "url": "https://attack.mitre.org/techniques/T1083/"
   },
   "T1046": {
@@ -168,6 +354,7 @@
     "tactic_name": "Discovery",
     "description": "Scan du réseau interne pour découvrir d'autres services et hôtes accessibles après compromission initiale.",
     "detection": "Surveiller les scans de ports internes, les tentatives de connexion multiples sur différents ports depuis un même hôte interne.",
+    "mitigations": "Micro-segmentation réseau. Interdire les flux latéraux non documentés (east-west firewall).",
     "url": "https://attack.mitre.org/techniques/T1046/"
   },
   "T1087.002": {
@@ -177,8 +364,50 @@
     "tactic_name": "Discovery",
     "description": "Enumération des comptes du domaine Active Directory via LDAP, pour identifier des cibles de mouvement latéral.",
     "detection": "Surveiller les requêtes LDAP anormalement volumineuses. Alerter sur l'utilisation de ldapsearch ou d'outils d'énumération AD depuis des hôtes non-autorisés.",
+    "mitigations": "LDAP signing et channel binding. Auditer les requêtes LDAP volumineuses côté DC. Honey-accounts pour détecter l'énumération.",
     "url": "https://attack.mitre.org/techniques/T1087/002/"
   },
+  "T1018": {
+    "id": "T1018",
+    "name": "Remote System Discovery",
+    "tactic_id": "TA0007",
+    "tactic_name": "Discovery",
+    "description": "Découverte d'autres systèmes accessibles depuis l'hôte compromis (ping sweep, arp scan, net view).",
+    "detection": "Détecter les ping/arp massifs depuis un poste interne. Alerter sur l'utilisation de `net view`, `nltest /dclist`.",
+    "mitigations": "Segmenter le réseau interne. ACL L3 strictes entre zones.",
+    "url": "https://attack.mitre.org/techniques/T1018/"
+  },
+  "T1057": {
+    "id": "T1057",
+    "name": "Process Discovery",
+    "tactic_id": "TA0007",
+    "tactic_name": "Discovery",
+    "description": "Énumération des processus en cours (tasklist, ps aux) pour identifier EDR, outils de sécurité, ou applications à cibler.",
+    "detection": "Peu détectable en tant que tel — corréler avec d'autres phases. Alerter si un processus non-admin liste LSASS.",
+    "mitigations": "Monitorer plutôt que bloquer. L'information sur les processus est nativement accessible.",
+    "url": "https://attack.mitre.org/techniques/T1057/"
+  },
+  "T1049": {
+    "id": "T1049",
+    "name": "System Network Connections Discovery",
+    "tactic_id": "TA0007",
+    "tactic_name": "Discovery",
+    "description": "Listage des connexions réseau actives (netstat, ss, `net use`) pour identifier les pivots et ressources partagées.",
+    "detection": "Corréler l'exécution de netstat/ss avec un compte récemment authentifié. Sigma rule netstat depuis un shell réseau.",
+    "mitigations": "Segmentation réseau. Droits minimaux sur les partages SMB/NFS.",
+    "url": "https://attack.mitre.org/techniques/T1049/"
+  },
+  "T1016": {
+    "id": "T1016",
+    "name": "System Network Configuration Discovery",
+    "tactic_id": "TA0007",
+    "tactic_name": "Discovery",
+    "description": "Collecte de la configuration réseau locale (ipconfig, ifconfig, route, /etc/hosts) pour cartographier le segment.",
+    "detection": "Corréler l'exécution d'ipconfig /all, route print, arp -a avec d'autres phases d'attaque.",
+    "mitigations": "Monitorer plutôt que bloquer.",
+    "url": "https://attack.mitre.org/techniques/T1016/"
+  },
+
   "T1021.001": {
     "id": "T1021.001",
     "name": "Remote Services: Remote Desktop Protocol",
@@ -186,6 +415,7 @@
     "tactic_name": "Lateral Movement",
     "description": "Utilisation de RDP avec des credentials valides (volés ou devinés) pour se déplacer latéralement vers d'autres machines.",
     "detection": "Surveiller les connexions RDP internes inattendues. Alerter sur les connexions RDP depuis des machines qui n'utilisent pas habituellement ce service.",
+    "mitigations": "MFA sur RDP (Azure MFA NPS, Duo). Network Level Authentication. Limiter RDP à un bastion jump-host.",
     "url": "https://attack.mitre.org/techniques/T1021/001/"
   },
   "T1021.002": {
@@ -195,6 +425,7 @@
     "tactic_name": "Lateral Movement",
     "description": "Utilisation des partages administratifs Windows (C$, ADMIN$, IPC$) via SMB pour exécuter du code ou se déplacer latéralement.",
     "detection": "Alerter sur les connexions SMB vers des partages administratifs depuis des hôtes inattendus. Surveiller l'utilisation de PsExec, wmic, sc.exe à distance.",
+    "mitigations": "Désactiver SMBv1. LAPS pour isoler les mots de passe admin local. Host firewall bloquant SMB entrant sauf depuis bastion.",
     "url": "https://attack.mitre.org/techniques/T1021/002/"
   },
   "T1021.004": {
@@ -204,6 +435,7 @@
     "tactic_name": "Lateral Movement",
     "description": "Utilisation de SSH avec des credentials ou des clés compromises pour se déplacer latéralement vers d'autres systèmes.",
     "detection": "Monitorer les connexions SSH internes machine-à-machine. Alerter sur les connexions SSH depuis des hôtes qui ne l'utilisent pas habituellement.",
+    "mitigations": "Clés SSH par machine (pas de clé partagée). Bastion obligatoire. Audit keys authorized_keys.",
     "url": "https://attack.mitre.org/techniques/T1021/004/"
   },
   "T1021.005": {
@@ -213,6 +445,7 @@
     "tactic_name": "Lateral Movement",
     "description": "Utilisation de VNC pour accéder graphiquement à distance à un système compromis ou se déplacer latéralement.",
     "detection": "Surveiller les connexions sur les ports VNC (5900-5910). Alerter sur les connexions VNC depuis des IPs externes ou des hôtes internes non-autorisés.",
+    "mitigations": "VNC via tunnel SSH uniquement. Mot de passe fort + authentification additionnelle.",
     "url": "https://attack.mitre.org/techniques/T1021/005/"
   },
   "T1210": {
@@ -222,8 +455,20 @@
     "tactic_name": "Lateral Movement",
     "description": "Exploitation d'une vulnérabilité dans un service réseau interne pour se propager latéralement (ex : EternalBlue via SMB).",
     "detection": "Surveiller les tentatives de connexion anormales sur des services internes (SMB, RPC). Détecter les exploits connus via des règles IDS/IPS (Suricata, Snort).",
+    "mitigations": "Patch rapide des services internes. IDS réseau au cœur du SI (pas uniquement en bordure). Micro-segmentation.",
     "url": "https://attack.mitre.org/techniques/T1210/"
   },
+  "T1570": {
+    "id": "T1570",
+    "name": "Lateral Tool Transfer",
+    "tactic_id": "TA0008",
+    "tactic_name": "Lateral Movement",
+    "description": "Transfert d'outils (mimikatz, shell, ransomware) vers un autre hôte après compromission initiale.",
+    "detection": "Alerter sur les copies de fichiers exécutables vers des partages SMB admin, les téléchargements via BITS/certutil.",
+    "mitigations": "Bloquer SMB sortant interne sauf vers partages métier listés. Surveiller BITS/certutil usage (rarement légitime).",
+    "url": "https://attack.mitre.org/techniques/T1570/"
+  },
+
   "T1005": {
     "id": "T1005",
     "name": "Data from Local System",
@@ -231,8 +476,102 @@
     "tactic_name": "Collection",
     "description": "Collecte de données sensibles directement sur le système compromis (fichiers, bases de données, configurations).",
     "detection": "Alerter sur les accès massifs à des fichiers sensibles. Surveiller les lectures de bases de données hors des processus applicatifs normaux.",
+    "mitigations": "DLP endpoint. Chiffrement au repos. Classification des données avec alertes si accès hors-profil.",
     "url": "https://attack.mitre.org/techniques/T1005/"
   },
+  "T1560": {
+    "id": "T1560",
+    "name": "Archive Collected Data",
+    "tactic_id": "TA0009",
+    "tactic_name": "Collection",
+    "description": "Compression et chiffrement des données collectées (7zip, rar, tar) avant exfiltration pour réduire le volume et contourner les DLP.",
+    "detection": "Alerter sur l'invocation de 7z/rar/tar avec chiffrement depuis des comptes qui ne le font pas habituellement. Fichiers archives apparus récemment dans /tmp.",
+    "mitigations": "DLP avec inspection profonde. Monitorer la création de gros fichiers archive sur les serveurs de données.",
+    "url": "https://attack.mitre.org/techniques/T1560/"
+  },
+  "T1113": {
+    "id": "T1113",
+    "name": "Screen Capture",
+    "tactic_id": "TA0009",
+    "tactic_name": "Collection",
+    "description": "Capture d'écran du poste compromis pour exfiltrer des informations visuelles (dashboards, conversations).",
+    "detection": "EDR comportemental — détecter les appels d'API BitBlt/CGDisplayCreateImage hors logiciel légitime.",
+    "mitigations": "Restreindre les outils de capture non-essentiels. Alertes EDR sur l'usage de screencapture en CLI.",
+    "url": "https://attack.mitre.org/techniques/T1113/"
+  },
+
+  "T1071": {
+    "id": "T1071",
+    "name": "Application Layer Protocol",
+    "tactic_id": "TA0011",
+    "tactic_name": "Command and Control",
+    "description": "Utilisation de protocoles applicatifs courants (HTTP, HTTPS, DNS) pour communiquer avec le C2 et se fondre dans le trafic légitime.",
+    "detection": "Inspection TLS et analyse JA3. Détecter les beacons (intervalle régulier, User-Agent anormal, domaines récents).",
+    "mitigations": "Proxy web avec inspection TLS et filtrage par réputation. DNS filtering (Umbrella, AdGuard).",
+    "url": "https://attack.mitre.org/techniques/T1071/"
+  },
+  "T1090": {
+    "id": "T1090",
+    "name": "Proxy",
+    "tactic_id": "TA0011",
+    "tactic_name": "Command and Control",
+    "description": "Utilisation d'un proxy interne (SOCKS, relay) pour pivoter le trafic C2 et obscurcir l'origine réelle.",
+    "detection": "Alerter sur les connexions sortantes multiples depuis un même hôte interne vers des ports inhabituels. Flagger les binaires proxy connus (frp, chisel).",
+    "mitigations": "Pare-feu egress strict. Interdire les connexions sortantes depuis les serveurs sauf sur les flux référencés.",
+    "url": "https://attack.mitre.org/techniques/T1090/"
+  },
+  "T1572": {
+    "id": "T1572",
+    "name": "Protocol Tunneling",
+    "tactic_id": "TA0011",
+    "tactic_name": "Command and Control",
+    "description": "Encapsulation de trafic C2 dans un autre protocole (DNS tunneling, ICMP, HTTP) pour contourner les pare-feux.",
+    "detection": "Détecter le DNS tunneling (requêtes longues, fréquence anormale, sous-domaines entropiques). Volumes ICMP anormaux.",
+    "mitigations": "DNS filtering avec détection de tunneling. Bloquer ICMP sortant depuis les serveurs non-admin.",
+    "url": "https://attack.mitre.org/techniques/T1572/"
+  },
+  "T1573": {
+    "id": "T1573",
+    "name": "Encrypted Channel",
+    "tactic_id": "TA0011",
+    "tactic_name": "Command and Control",
+    "description": "Chiffrement du canal C2 (TLS custom, cryptographie non-standard) pour empêcher l'analyse du contenu.",
+    "detection": "Analyse JA3/JA3S — empreinte cliente TLS anormale. Certificats auto-signés ou Let's Encrypt récents vers domaines peu réputés.",
+    "mitigations": "Inspection TLS en bordure. Détection par IOC sur fingerprints JA3 malveillants connus.",
+    "url": "https://attack.mitre.org/techniques/T1573/"
+  },
+
+  "T1041": {
+    "id": "T1041",
+    "name": "Exfiltration Over C2 Channel",
+    "tactic_id": "TA0010",
+    "tactic_name": "Exfiltration",
+    "description": "Exfiltration des données via le même canal que le C2 pour limiter la surface détectable.",
+    "detection": "Corréler les volumes sortants anormaux avec les sessions C2 identifiées. Alerter sur les envois de >100 MB via HTTPS vers un domaine peu réputé.",
+    "mitigations": "Proxy avec inspection et rate limiting. DLP réseau sur les endpoints.",
+    "url": "https://attack.mitre.org/techniques/T1041/"
+  },
+  "T1048": {
+    "id": "T1048",
+    "name": "Exfiltration Over Alternative Protocol",
+    "tactic_id": "TA0010",
+    "tactic_name": "Exfiltration",
+    "description": "Utilisation d'un protocole non-C2 (FTP, SMTP, DNS, Cloud) pour exfiltrer — souvent autorisé par défaut en sortie.",
+    "detection": "Alerter sur les uploads FTP/SFTP depuis des serveurs qui ne le font pas habituellement. Volumes SMTP sortants anormaux.",
+    "mitigations": "Egress filtering strict. Bloquer les protocoles d'upload non nécessaires. Monitorer les volumes DNS par host.",
+    "url": "https://attack.mitre.org/techniques/T1048/"
+  },
+  "T1567": {
+    "id": "T1567",
+    "name": "Exfiltration Over Web Service",
+    "tactic_id": "TA0010",
+    "tactic_name": "Exfiltration",
+    "description": "Exfiltration vers un service web légitime (Dropbox, Pastebin, Gdrive, Github) pour exploiter la réputation du domaine.",
+    "detection": "Proxy avec catégorisation. Alerter sur les uploads vers services de partage depuis comptes de service.",
+    "mitigations": "Liste de services Cloud autorisés (allow-list). Blocage ou inspection profonde pour les autres domaines cloud.",
+    "url": "https://attack.mitre.org/techniques/T1567/"
+  },
+
   "T1486": {
     "id": "T1486",
     "name": "Data Encrypted for Impact",
@@ -240,6 +579,7 @@
     "tactic_name": "Impact",
     "description": "Chiffrement des données de la cible pour rendre le système inutilisable et exiger une rançon (ransomware).",
     "detection": "Surveiller la création massive de fichiers avec des extensions inhabituelles. Alerter sur les modifications massives de fichiers en peu de temps. Détecter les Shadow Copy deletions.",
+    "mitigations": "Sauvegardes hors-ligne testées régulièrement. EDR avec protection anti-ransomware. Canary files.",
     "url": "https://attack.mitre.org/techniques/T1486/"
   },
   "T1499": {
@@ -249,6 +589,7 @@
     "tactic_name": "Impact",
     "description": "Saturation d'un service ou d'un hôte pour le rendre indisponible (déni de service applicatif ou réseau).",
     "detection": "Surveiller les métriques de performance (CPU, mémoire, réseau). Alerter sur les pics de trafic anormaux. Configurer des rate limits sur les services exposés.",
+    "mitigations": "Rate limiting applicatif. WAF avec anti-bot. Auto-scaling des services critiques.",
     "url": "https://attack.mitre.org/techniques/T1499/"
   },
   "T1485": {
@@ -258,6 +599,37 @@
     "tactic_name": "Impact",
     "description": "Suppression ou destruction de données pour rendre le système inopérant ou effacer des traces.",
     "detection": "Alerter sur les suppressions massives de fichiers. Surveiller les commandes rm -rf, format, wipe sur des chemins sensibles. Monitorer l'intégrité des sauvegardes.",
+    "mitigations": "Droits minimaux. Sauvegardes immutables (object lock S3). Détection EDR sur `sdelete`, `cipher /w`, `dd of=`.",
     "url": "https://attack.mitre.org/techniques/T1485/"
+  },
+  "T1491": {
+    "id": "T1491",
+    "name": "Defacement",
+    "tactic_id": "TA0040",
+    "tactic_name": "Impact",
+    "description": "Modification publique de contenu (web, réseau social) pour atteindre la réputation ou diffuser un message.",
+    "detection": "FIM sur les webroot. Alertes sur modifications des fichiers d'index. Scan périodique externe de la homepage.",
+    "mitigations": "Déploiement via pipeline CI/CD avec signatures. Rollback automatique en cas de changement hors-pipeline.",
+    "url": "https://attack.mitre.org/techniques/T1491/"
+  },
+  "T1498": {
+    "id": "T1498",
+    "name": "Network Denial of Service",
+    "tactic_id": "TA0040",
+    "tactic_name": "Impact",
+    "description": "Saturation de la bande passante réseau (DDoS volumétrique, amplification) pour rendre les services inaccessibles.",
+    "detection": "Monitoring SNMP/flow sur les liens WAN. Alerter sur trafic entrant >3× la normale.",
+    "mitigations": "Service anti-DDoS en amont (Cloudflare, AWS Shield, OVH). Blackhole BGP pour trafic massif.",
+    "url": "https://attack.mitre.org/techniques/T1498/"
+  },
+  "T1561": {
+    "id": "T1561",
+    "name": "Disk Wipe",
+    "tactic_id": "TA0040",
+    "tactic_name": "Impact",
+    "description": "Écrasement ou destruction du contenu disque (MBR, VBR, partitions) pour rendre la machine non bootable.",
+    "detection": "Alerter sur les écritures raw device (/dev/sda) depuis des processus non-système. Signal MBR overwrite via EDR.",
+    "mitigations": "Bitlocker/LUKS avec récupération. Image système hors-ligne. Restriction des droits sur raw devices.",
+    "url": "https://attack.mitre.org/techniques/T1561/"
   }
 }
