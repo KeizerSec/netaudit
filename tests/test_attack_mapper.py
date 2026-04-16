@@ -12,6 +12,9 @@ import pytest
 from attack_mapper import (
     _map_service_techniques,
     _map_cve_techniques,
+    _map_cwe_techniques,
+    _map_known_cve_techniques,
+    _heuristic_cve_techniques,
     _deduplicate_techniques,
     _calculate_risk_level,
     _generate_attack_path,
@@ -178,6 +181,114 @@ class TestMapCveTechniques:
         techs = _map_cve_techniques("CVE-2021-1234", 9.0, "http", 80)
         for t in techs:
             assert "CVE-2021-1234" in t["source"]
+
+
+# ─── Tests _map_cwe_techniques ────────────────────────────────────────────────
+
+class TestMapCweTechniques:
+
+    def test_sql_injection_cwe_maps_t1190(self):
+        techs = _map_cwe_techniques("CWE-89", "CVE-test")
+        ids = [t["id"] for t in techs]
+        assert "T1190" in ids
+
+    def test_os_command_injection_maps_t1059_and_t1190(self):
+        techs = _map_cwe_techniques("CWE-78", "CVE-test")
+        ids = [t["id"] for t in techs]
+        assert "T1059" in ids
+        assert "T1190" in ids
+
+    def test_deserialization_maps_t1190(self):
+        techs = _map_cwe_techniques("CWE-502", "CVE-test")
+        ids = [t["id"] for t in techs]
+        assert "T1190" in ids
+
+    def test_hardcoded_credentials_maps_t1078_and_t1552(self):
+        techs = _map_cwe_techniques("CWE-798", "CVE-test")
+        ids = [t["id"] for t in techs]
+        assert "T1078" in ids
+        assert "T1552" in ids
+
+    def test_unknown_cwe_returns_empty(self):
+        assert _map_cwe_techniques("CWE-99999", "CVE-test") == []
+
+    def test_confidence_propagated_from_catalog(self):
+        # CWE-89 (SQLi) → T1190 en confiance haute
+        techs = _map_cwe_techniques("CWE-89", "CVE-test")
+        t1190 = next(t for t in techs if t["id"] == "T1190")
+        assert t1190["confidence"] == "high"
+
+    def test_source_transmise(self):
+        techs = _map_cwe_techniques("CWE-89", "my-custom-source")
+        assert all(t["source"] == "my-custom-source" for t in techs)
+
+
+# ─── Tests _map_known_cve_techniques ──────────────────────────────────────────
+
+class TestMapKnownCveTechniques:
+
+    def test_log4shell_maps_via_cwe_502(self):
+        techs = _map_known_cve_techniques("CVE-2021-44228")
+        ids = [t["id"] for t in techs]
+        # CWE-502 → T1190 (high) + T1059 (medium)
+        assert "T1190" in ids
+
+    def test_heartbleed_maps_via_cwe_125(self):
+        techs = _map_known_cve_techniques("CVE-2014-0160")
+        ids = [t["id"] for t in techs]
+        # CWE-125 → T1082 (medium)
+        assert "T1082" in ids
+
+    def test_shellshock_maps_via_cwe_78(self):
+        techs = _map_known_cve_techniques("CVE-2014-6271")
+        ids = [t["id"] for t in techs]
+        assert "T1059" in ids
+        assert "T1190" in ids
+
+    def test_eternalblue_maps_via_cwe_119(self):
+        techs = _map_known_cve_techniques("CVE-2017-0144")
+        ids = [t["id"] for t in techs]
+        # CWE-119 → T1190 (high) + T1068 (medium)
+        assert "T1190" in ids
+        assert "T1068" in ids
+
+    def test_unknown_cve_returns_empty(self):
+        assert _map_known_cve_techniques("CVE-9999-99999") == []
+
+    def test_case_insensitive_lookup(self):
+        # Le catalogue normalise en majuscules
+        techs = _map_known_cve_techniques("cve-2021-44228")
+        assert len(techs) > 0
+
+    def test_source_mentionne_le_nom_commun(self):
+        techs = _map_known_cve_techniques("CVE-2021-44228")
+        # "Log4Shell" doit figurer dans la source pour être lisible
+        assert any("Log4Shell" in t["source"] for t in techs)
+
+
+# ─── Tests _map_cve_techniques (orchestrateur) ────────────────────────────────
+
+class TestMapCveTechniquesOrchestrator:
+
+    def test_known_cve_combines_cwe_and_heuristic(self):
+        # CVE-2017-0144 (EternalBlue) sur SMB 445
+        # Attendu : CWE-119 → T1190, T1068  +  heuristique SMB → T1210, T1021.002
+        techs = _map_cve_techniques("CVE-2017-0144", 9.3, "smb", 445)
+        ids = [t["id"] for t in techs]
+        assert "T1068" in ids   # vient du mapping CWE
+        assert "T1210" in ids   # vient de l'heuristique SMB
+
+    def test_unknown_cve_falls_back_to_heuristic_only(self):
+        techs = _map_cve_techniques("CVE-9999-0001", 9.8, "http", 80)
+        ids = [t["id"] for t in techs]
+        assert "T1190" in ids
+
+    def test_known_cve_preserves_heuristic_behavior(self):
+        # Même test que TestMapCveTechniques.test_critical_smb_maps_t1210
+        # doit continuer à fonctionner malgré l'ajout du chemin CWE
+        techs = _map_cve_techniques("CVE-2017-0144", 9.3, "smb", 445)
+        ids = [t["id"] for t in techs]
+        assert "T1210" in ids
 
 
 # ─── Tests _deduplicate_techniques ───────────────────────────────────────────

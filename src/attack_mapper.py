@@ -30,14 +30,18 @@ def _load_json(filename: str) -> dict:
 
 
 try:
-    _TECHNIQUES: dict     = _load_json("techniques.json")
-    _CWE_MAPPING: dict    = _load_json("cwe_mapping.json")
+    _TECHNIQUES: dict      = _load_json("techniques.json")
+    _CWE_MAPPING: dict     = _load_json("cwe_mapping.json")
     _SERVICE_MAPPING: dict = _load_json("service_mapping.json")
+    _KNOWN_CVES: dict      = _load_json("known_cves.json")
+    # Nettoyer les clés de commentaire éventuelles
+    _KNOWN_CVES = {k: v for k, v in _KNOWN_CVES.items() if not k.startswith("_")}
 except FileNotFoundError as exc:
     logging.error("Fichier de données ATT&CK manquant : %s", exc)
     _TECHNIQUES = {}
     _CWE_MAPPING = {}
     _SERVICE_MAPPING = {}
+    _KNOWN_CVES = {}
 
 # ─── Ordre du kill chain MITRE (tactic_id → position) ───────────────────────
 
@@ -140,9 +144,48 @@ def _map_service_techniques(port: int, service: str) -> list[dict]:
     return results
 
 
-def _map_cve_techniques(vuln_id: str, score: float, service: str, port: int) -> list[dict]:
+def _map_cwe_techniques(cwe_id: str, source: str) -> list[dict]:
     """
-    Niveau 2 — Mapping heuristique CVE → techniques via score CVSS + contexte service.
+    Niveau 2a — Mapping CWE → techniques ATT&CK via cwe_mapping.json.
+
+    Retourne une liste vide si la CWE n'est pas cataloguée.
+    La confiance est celle déclarée dans le catalogue (haute pour les CWEs
+    directement exploitables type injection, moyenne pour les CWEs plus
+    génériques type info disclosure).
+    """
+    results = []
+    cwe_entry = _CWE_MAPPING.get(cwe_id)
+    if not cwe_entry:
+        return results
+    for tech_ref in cwe_entry.get("techniques", []):
+        results.append(_build_technique_entry(
+            tech_ref["id"],
+            confidence=tech_ref.get("confidence", "medium"),
+            source=source,
+        ))
+    return results
+
+
+def _map_known_cve_techniques(vuln_id: str) -> list[dict]:
+    """
+    Niveau 2b — Si le CVE est catalogué dans known_cves.json, retourne les
+    techniques déduites de sa CWE connue. Plus précis que l'heuristique CVSS.
+    """
+    known = _KNOWN_CVES.get(vuln_id.upper())
+    if not known:
+        return []
+    cwe_id = known.get("cwe", "")
+    if not cwe_id:
+        return []
+    label = known.get("name", vuln_id)
+    source = f"{vuln_id} — {label} ({cwe_id})"
+    return _map_cwe_techniques(cwe_id, source)
+
+
+def _heuristic_cve_techniques(vuln_id: str, score: float, service: str, port: int) -> list[dict]:
+    """
+    Niveau 2c — Heuristique de repli : score CVSS + contexte service.
+    Utilisée quand la CVE n'est pas dans known_cves.json.
 
     Heuristiques :
       - Score ≥ 9.0 sur service web/réseau  → RCE probable → T1190 haute confiance
@@ -194,6 +237,26 @@ def _map_cve_techniques(vuln_id: str, score: float, service: str, port: int) -> 
 
     # Score < 4.0 : non mappé — bruit trop important
 
+    return results
+
+
+def _map_cve_techniques(vuln_id: str, score: float, service: str, port: int) -> list[dict]:
+    """
+    Niveau 2 — Orchestrateur du mapping CVE → techniques ATT&CK.
+
+    Combine deux sources, dont les résultats sont dédupliqués en aval :
+      - Mapping précis via CWE connue (known_cves.json → cwe_mapping.json).
+        Active uniquement pour les CVEs cataloguées (Log4Shell, EternalBlue, …).
+      - Heuristique CVSS + contexte service (toujours appliquée pour capter
+        le contexte réseau — SMB, web, DB — qui n'est pas encodé dans la CWE).
+
+    Les deux couches sont volontairement complémentaires : le mapping CWE
+    cible la nature de la faille (ex. buffer overflow → T1068), la couche
+    heuristique cible le vecteur d'exploitation (ex. via SMB → T1210).
+    """
+    results: list[dict] = []
+    results.extend(_map_known_cve_techniques(vuln_id))
+    results.extend(_heuristic_cve_techniques(vuln_id, score, service, port))
     return results
 
 
