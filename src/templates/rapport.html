@@ -630,6 +630,82 @@
             display: contents;
         }
 
+        /* ── Priority badges (EPSS + KEV) ────────────────── */
+        .priority-badge {
+            display: inline-block;
+            padding: 0.15rem 0.55rem;
+            border-radius: 4px;
+            font-size: 0.66rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            vertical-align: middle;
+        }
+        .priority-immediate { background: rgba(248,81,73,0.25);  color: #ff6b6b; border: 1px solid rgba(248,81,73,0.5); }
+        .priority-high      { background: rgba(219,109,40,0.2);  color: var(--orange); border: 1px solid rgba(219,109,40,0.4); }
+        .priority-medium    { background: rgba(210,153,34,0.2);  color: var(--yellow); border: 1px solid rgba(210,153,34,0.4); }
+        .priority-low       { background: rgba(63,185,80,0.2);   color: var(--green);  border: 1px solid rgba(63,185,80,0.4); }
+        .priority-info      { background: rgba(139,148,158,0.15); color: var(--muted); border: 1px solid rgba(139,148,158,0.3); }
+
+        .kev-flag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.05rem 0.35rem;
+            border-radius: 3px;
+            font-size: 0.62rem;
+            font-weight: 700;
+            background: rgba(248,81,73,0.15);
+            color: var(--red);
+            border: 1px solid rgba(248,81,73,0.4);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .kev-flag.ransomware { background: #3a0a0a; color: #ffb3b3; border-color: var(--red); }
+
+        .epss-score {
+            display: inline-block;
+            font-size: 0.66rem;
+            color: var(--muted);
+            font-family: 'Courier New', monospace;
+            margin-left: 0.25rem;
+        }
+
+        /* Bloc « Priorités d'action » */
+        .priority-block {
+            margin: 1.5rem 0;
+            background: rgba(248,81,73,0.04);
+            border: 1px solid rgba(248,81,73,0.2);
+            border-radius: 8px;
+            padding: 1rem 1.2rem;
+        }
+        .priority-block h3 {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--red);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.75rem;
+        }
+        .priority-block .sources {
+            font-size: 0.7rem;
+            color: var(--muted);
+            margin-top: 0.75rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid var(--border);
+        }
+        .top-vuln-row {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.35rem 0;
+            font-size: 0.78rem;
+            flex-wrap: wrap;
+        }
+        .top-vuln-row .vcve { font-family: 'Courier New', monospace; color: var(--accent); }
+        .top-vuln-row .vport { color: var(--muted); font-size: 0.72rem; }
+        .top-vuln-row .vscore { margin-left: auto; color: var(--text); font-weight: 700; }
+
         /* ── Print-friendly styles ───────────────────────── */
         @media print {
             :root {
@@ -753,6 +829,21 @@
         <div class="value" style="font-size:0.9rem;">{{ data.os_guess }}</div>
     </div>
     {% endif %}
+    {% if data.priority_summary and data.total_vulns > 0 %}
+    {% set ps = data.priority_summary %}
+    <div class="meta-card">
+        <label>Priorité max</label>
+        <div class="value" style="font-size:0.95rem;">
+            <span class="priority-badge priority-{{ ps.max_level | lower }}">{{ ps.max_level }}</span>
+        </div>
+        {% if ps.kev_count > 0 %}
+        <div style="font-size:0.72rem; color: var(--muted); margin-top:0.3rem;">
+            {{ ps.kev_count }} CVE{{ 's' if ps.kev_count > 1 else '' }} dans KEV
+            {% if ps.ransomware_count > 0 %} · <span style="color: var(--red);">{{ ps.ransomware_count }} ransomware</span>{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
 </div>
 
 <!-- ── Erreur éventuelle ───────────────────────────────────── -->
@@ -803,6 +894,17 @@
                             <span class="vuln-id">
                                 <a href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ v.id }}</a>
                             </span>
+                            {% if v.kev %}
+                                <span class="kev-flag{% if v.kev.ransomware %} ransomware{% endif %}" title="CISA KEV — exploitation avérée{% if v.kev.ransomware %} (ransomware){% endif %}{% if v.kev.due_date %} — échéance fédérale {{ v.kev.due_date }}{% endif %}">
+                                    {% if v.kev.ransomware %}RANSOM{% else %}KEV{% endif %}
+                                </span>
+                            {% endif %}
+                            {% if v.priority_level %}
+                                <span class="priority-badge priority-{{ v.priority_level | lower }}" title="Score priorité {{ v.priority_score }}">{{ v.priority_level }}</span>
+                            {% endif %}
+                            {% if v.epss and v.epss.score is defined %}
+                                <span class="epss-score" title="EPSS {{ '%.1f' | format(v.epss.percentile * 100) }}ᵉ percentile">EPSS {{ '%.3f' | format(v.epss.score) }}</span>
+                            {% endif %}
                         </li>
                         {% endfor %}
                     </ul>
@@ -819,6 +921,36 @@
     {% if not data.error %}
     <p class="no-ports">Aucun port ouvert détecté sur cet hôte.</p>
     {% endif %}
+{% endif %}
+
+<!-- ── Priorités d'action (EPSS + CISA KEV) ───────────────── -->
+{% if data.priority_summary and data.priority_summary.top %}
+{% set ps = data.priority_summary %}
+<div class="priority-block">
+    <h3>Top priorités d'action</h3>
+    {% for item in ps.top %}
+    <div class="top-vuln-row">
+        <span class="priority-badge priority-{{ item.priority_level | lower }}">{{ item.priority_level }}</span>
+        <span class="vcve">{{ item.id }}</span>
+        <span class="vport">port {{ item.port }}</span>
+        {% if item.ransomware %}
+            <span class="kev-flag ransomware">RANSOM</span>
+        {% elif item.in_kev %}
+            <span class="kev-flag">KEV</span>
+        {% endif %}
+        <span class="vscore">{{ "%.2f" | format(item.priority_score) }}</span>
+    </div>
+    {% endfor %}
+    {% if ps.sources_used %}
+    <div class="sources">
+        Sources : {{ ps.sources_used | join(' · ') }}. Score = CVSS + 3.0 si KEV + 1.5 si ransomware + EPSS pondéré.
+    </div>
+    {% else %}
+    <div class="sources">
+        Enrichissement réseau indisponible — priorisation basée sur CVSS seul.
+    </div>
+    {% endif %}
+</div>
 {% endif %}
 
 <!-- ── Section ATT&CK ─────────────────────────────────────── -->
@@ -975,7 +1107,28 @@ function buildMarkdown(data) {
     if (data.attack_summary && data.attack_summary.risk_level) {
         lines.push("- **Niveau de risque ATT&CK :** " + data.attack_summary.risk_level);
     }
+    if (data.priority_summary && data.total_vulns) {
+        var ps = data.priority_summary;
+        lines.push("- **Priorité max :** " + ps.max_level +
+                   " (KEV: " + (ps.kev_count || 0) +
+                   ", ransomware: " + (ps.ransomware_count || 0) + ")");
+    }
     lines.push("");
+
+    if (data.priority_summary && data.priority_summary.top && data.priority_summary.top.length) {
+        lines.push("## Top priorités d'action");
+        lines.push("");
+        data.priority_summary.top.forEach(function (t) {
+            var flags = [];
+            if (t.ransomware) flags.push("RANSOM");
+            else if (t.in_kev) flags.push("KEV");
+            lines.push("- **[" + t.priority_level + "]** " + t.id +
+                       " — port " + t.port +
+                       " — score " + (t.priority_score || 0).toFixed(2) +
+                       (flags.length ? " — " + flags.join(", ") : ""));
+        });
+        lines.push("");
+    }
 
     if (data.ports && data.ports.length) {
         lines.push("## Ports");

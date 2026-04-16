@@ -7,7 +7,7 @@
 ![MITRE ATT&CK](https://img.shields.io/badge/MITRE_ATT%26CK-Correlation-E8001D?style=for-the-badge&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)
 
-**Scanner de vulnérabilités réseau avec corrélation MITRE ATT&CK.** Donnez une IP, recevez un rapport structuré — ports ouverts, CVEs détectées, techniques d'attaque ATT&CK associées, chemin d'attaque ordonné selon le kill chain, niveau de risque global, priorités de détection SIEM. Trois formats de sortie (HTML interactif, JSON, PDF A4) et une API REST protégée par clé.
+**Scanner de vulnérabilités réseau avec corrélation MITRE ATT&CK et priorisation EPSS + CISA KEV.** Donnez une IP, recevez un rapport structuré — ports ouverts, CVEs détectées, techniques d'attaque ATT&CK associées, chemin d'attaque ordonné selon le kill chain, **priorités d'action basées sur exploitation réelle** (présence dans le catalogue CISA KEV, score probabiliste FIRST EPSS, flag ransomware), niveau de risque global, priorités de détection SIEM. Trois formats de sortie (HTML interactif, JSON, PDF A4) et une API REST protégée par clé.
 
 > **Usage légal uniquement.** Ne scannez que des hôtes sur lesquels vous avez une autorisation explicite.
 
@@ -45,13 +45,22 @@ Vous donnez une IP  →  NetAudit lance Nmap + Vulners  →  Vous obtenez :
   • Jusqu'à 5 priorités de détection SIEM extraites automatiquement
   • Mitigations concrètes proposées par technique
 
-  Couche 3 — Rapport & exports
+  Couche 3 — Priorisation réelle (EPSS + CISA KEV)
+  • Croisement avec CISA KEV — preuve d'exploitation active dans la nature
+  • Score FIRST EPSS — probabilité d'exploitation à 30 jours (0–1)
+  • Flag ransomware — CVEs utilisées dans des campagnes documentées
+  • Score combiné : CVSS + 3.0 (KEV) + 1.5 (ransomware) + EPSS pondéré
+  • Niveau : IMMEDIATE / HIGH / MEDIUM / LOW / INFO
+  • Top 5 priorités d'action affiché en tête du rapport
+  • Cache disque 24 h — offline-safe, dégrade sur cache périmé si réseau KO
+
+  Couche 4 — Rapport & exports
   • Rapport HTML dark-mode : donut CVSS, kill chain cliquable, filtre ports
   • Export JSON brut pour intégration outils tiers
   • Export PDF A4 généré via reportlab — archivage, audit, rapport formel
   • Bouton « Copier en Markdown » pour ticket / PR / rapport d'incident
 
-  Couche 4 — Historique & observabilité
+  Couche 5 — Historique & observabilité
   • Persistance SQLite — chaque scan survit au redémarrage
   • Endpoints /history et /history/<ip> pour suivi de tendances
   • /version — traçabilité de l'image déployée (semver + hash commit)
@@ -136,7 +145,16 @@ curl http://localhost:5000/scan/192.168.1.1 \
           "attack_techniques": [
             { "id": "T1078", "name": "Valid Accounts", "confidence": "medium" },
             { "id": "T1068", "name": "Exploitation for Privilege Escalation", "confidence": "medium" }
-          ]
+          ],
+          "kev": {
+            "ransomware": false,
+            "due_date": "2023-03-14",
+            "short_desc": "OpenSSH double-free vulnerability",
+            "date_added": "2023-02-21"
+          },
+          "epss": { "score": 0.042, "percentile": 0.91 },
+          "priority_score": 10.84,
+          "priority_level": "HIGH"
         }
       ],
       "service_techniques": [
@@ -158,6 +176,17 @@ curl http://localhost:5000/scan/192.168.1.1 \
       "Surveiller les tentatives de connexion SSH répétées",
       "Alerter sur les connexions depuis des plages IP inhabituelles"
     ]
+  },
+  "priority_summary": {
+    "max_level": "HIGH",
+    "counts": { "IMMEDIATE": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 0, "INFO": 0 },
+    "kev_count": 1,
+    "ransomware_count": 0,
+    "top": [
+      { "id": "CVE-2021-28041", "port": 22, "priority_score": 10.84,
+        "priority_level": "HIGH", "in_kev": true, "ransomware": false }
+    ],
+    "sources_used": ["CISA KEV", "FIRST EPSS"]
   },
   "rapport_html": "/rapport/192.168.1.1"
 }
@@ -195,7 +224,7 @@ curl http://localhost:5000/history/192.168.1.1
 
 ```bash
 curl http://localhost:5000/version
-# → {"name": "NetAudit", "version": "2.1.0", "commit": "0403e03"}
+# → {"name": "NetAudit", "version": "2.2.0", "commit": "0403e03"}
 ```
 
 ---
@@ -231,6 +260,8 @@ cp .env.example .env
 | `CACHE_SIZE` | `32` | Nombre d'IPs mémorisées en cache |
 | `LOG_FILE_PATH` | `/app/logs/scan.log` | Chemin du fichier de log |
 | `HISTORY_DB_PATH` | `/app/netaudit.db` | Base SQLite de l'historique des scans |
+| `CACHE_DIR` | `/app/cache` | Dossier cache KEV + EPSS, TTL 24 h |
+| `PRIORITIZER_ENABLED` | `1` | Mettre à `0` pour désactiver les appels réseau (offline strict) |
 | `BUILD_COMMIT` | *(vide)* | Hash commit injecté au build Docker, exposé par `/version` |
 
 ---
@@ -254,6 +285,16 @@ cp .env.example .env
 - 5 priorités de détection extraites automatiquement
 - Mitigations concrètes proposées par technique
 - Base de données locale : 62 techniques ATT&CK, 26 CWEs, 30 services, 39 CVEs connues
+
+**Priorisation réelle (EPSS + CISA KEV)**
+- Flag CISA KEV — chaque CVE croisée avec le catalogue officiel *Known Exploited Vulnerabilities*
+- Score FIRST EPSS (0–1) — probabilité d'exploitation à 30 jours, recalculé quotidiennement
+- Flag ransomware distinct — CVEs documentées dans des campagnes actives
+- Score de priorité combiné : CVSS + 3.0 (KEV) + 1.5 (ransomware) + 2.0 × EPSS (≥ 0.5) ou 1.0 × EPSS
+- Niveaux : IMMEDIATE ≥ 13 / HIGH ≥ 10 / MEDIUM ≥ 6 / LOW ≥ 3 / INFO
+- Cache disque agrégé, TTL 24 h — second scan de la journée sans appel réseau
+- Offline-safe — échec réseau sans cache = scan continue sans enrichissement, cache périmé réutilisé en mode dégradé
+- Bloc « Top priorités d'action » affiché en tête du rapport HTML
 
 **Rapport & UX**
 - Rapport HTML dark-mode avec donut SVG de répartition des sévérités CVSS
@@ -286,7 +327,7 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-**163 tests** — validation IP, parsing Nmap XML, endpoints API (scan, rapport, history, version, health), corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue CVEs connues, déduplication, calcul de risque, chemin d'attaque, intégrité du catalogue), persistance SQLite (insertion, lecture, filtrage par IP), génération PDF (smoke test binaire, robustesse aux données partielles).
+**196 tests** — validation IP, parsing Nmap XML, endpoints API (scan, rapport, history, version, health), corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue CVEs connues, déduplication, calcul de risque, chemin d'attaque, intégrité du catalogue), persistance SQLite (insertion, lecture, filtrage par IP), génération PDF (smoke test binaire, robustesse aux données partielles), priorisation EPSS + KEV (formule de score, seuils de niveau, cache TTL, batch API, fallback offline, dégradation sur cache périmé).
 
 ---
 
@@ -299,6 +340,7 @@ netaudit/
 │   ├── webapp.py            # API REST Flask (scan, rapport, history, version, health)
 │   ├── attack_mapper.py     # Corrélation MITRE ATT&CK — techniques, chemin, risque
 │   ├── history.py           # Persistance SQLite + accès historique
+│   ├── prioritizer.py       # Priorisation EPSS + CISA KEV, cache 24 h, offline-safe
 │   ├── exports.py           # Génération PDF via reportlab
 │   ├── version.py           # Version sémantique + hash commit
 │   ├── data/
@@ -313,7 +355,8 @@ netaudit/
 │   ├── test_webapp.py       # Endpoints API, auth, formats d'export, historique
 │   ├── test_attack_mapper.py # Corrélation ATT&CK (81 cas)
 │   ├── test_history.py      # Persistance SQLite (14 cas)
-│   └── test_exports.py      # Génération PDF (6 cas)
+│   ├── test_exports.py      # Génération PDF (6 cas)
+│   └── test_prioritizer.py  # Priorisation EPSS + KEV (33 cas)
 ├── .env.example             # Modèle de configuration
 ├── Dockerfile               # Image slim Python 3.11 + Nmap, Gunicorn, HEALTHCHECK
 └── requirements.txt         # Dépendances avec versions fixées
@@ -325,6 +368,7 @@ netaudit/
 
 > NetAudit est un outil d'audit rapide et d'apprentissage.
 > La corrélation ATT&CK est heuristique (basée sur le score CVSS et le service) — elle donne des pistes, pas des certitudes.
+> La priorisation EPSS + KEV nécessite un accès réseau aux endpoints publics CISA et FIRST ; en mode offline strict (`PRIORITIZER_ENABLED=0`), seul le CVSS est utilisé.
 > Il ne remplace pas des solutions professionnelles comme Nessus, OpenVAS, ou une analyse manuelle des CVEs.
 
 ---

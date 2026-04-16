@@ -273,6 +273,11 @@ def lancer_scan(ip: str) -> tuple:
     from attack_mapper import enrich_scan_result
     data = enrich_scan_result(data)
 
+    # Priorisation réelle via EPSS + CISA KEV — transforme « CVSS nu » en
+    # score actionnable (exploitation avérée, probabilité, ransomware).
+    from prioritizer import enrich_vulns
+    data = enrich_vulns(data)
+
     # Persistance : l'historique survit au redémarrage et alimente /history.
     # Import local pour éviter un couplage circulaire au chargement du module.
     from history import record_scan

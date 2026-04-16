@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app
 
 # Créer les dossiers de données
-RUN mkdir -p /app/rapports /app/logs
+RUN mkdir -p /app/rapports /app/logs /app/cache
 
 # Variables d'environnement par défaut (surchargeables via --env ou .env)
 ENV LOG_FILE_PATH=/app/logs/scan.log
@@ -23,6 +23,8 @@ ENV REPORT_DIR=/app/rapports
 ENV NMAP_TIMEOUT=300
 ENV CACHE_SIZE=32
 ENV HISTORY_DB_PATH=/app/netaudit.db
+ENV CACHE_DIR=/app/cache
+ENV PRIORITIZER_ENABLED=1
 # API_KEY est intentionnellement absente — à définir en production
 
 # Hash commit injecté au build via --build-arg BUILD_COMMIT=$(git rev-parse --short HEAD)

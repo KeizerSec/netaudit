@@ -89,16 +89,17 @@ def scan(ip: str):
         return jsonify({"error": data["error"], "status": "failed"}), 500
 
     return jsonify({
-        "status":         "ok",
-        "ip":             data["ip"],
-        "host_up":        data["host_up"],
-        "hostname":       data.get("hostname", ""),
-        "os_guess":       data.get("os_guess", ""),
-        "scan_date":      data.get("scan_date"),
-        "ports":          data["ports"],
-        "total_vulns":    data["total_vulns"],
-        "attack_summary": data.get("attack_summary"),
-        "rapport_html":   f"/rapport/{ip}",
+        "status":           "ok",
+        "ip":               data["ip"],
+        "host_up":          data["host_up"],
+        "hostname":         data.get("hostname", ""),
+        "os_guess":         data.get("os_guess", ""),
+        "scan_date":        data.get("scan_date"),
+        "ports":            data["ports"],
+        "total_vulns":      data["total_vulns"],
+        "attack_summary":   data.get("attack_summary"),
+        "priority_summary": data.get("priority_summary"),
+        "rapport_html":     f"/rapport/{ip}",
     })
 
 
