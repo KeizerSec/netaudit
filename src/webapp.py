@@ -1,3 +1,4 @@
+import hmac
 import os
 import logging
 from functools import wraps
@@ -32,14 +33,20 @@ if not API_KEY:
 
 
 def require_api_key(f):
-    """Décorateur : vérifie l'en-tête X-API-Key si API_KEY est configurée."""
+    """Décorateur : vérifie l'en-tête X-API-Key si API_KEY est configurée.
+
+    Utilise hmac.compare_digest pour une comparaison à temps constant,
+    évitant les attaques par timing sur la clé.
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
-        if API_KEY and request.headers.get("X-API-Key", "") != API_KEY:
-            return jsonify({
-                "error":  "Clé API invalide ou manquante.",
-                "status": "unauthorized",
-            }), 401
+        if API_KEY:
+            provided = request.headers.get("X-API-Key", "")
+            if not hmac.compare_digest(provided, API_KEY):
+                return jsonify({
+                    "error":  "Clé API invalide ou manquante.",
+                    "status": "unauthorized",
+                }), 401
         return f(*args, **kwargs)
     return decorated
 
