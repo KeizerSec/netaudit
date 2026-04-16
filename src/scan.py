@@ -223,6 +223,10 @@ def lancer_scan(ip: str) -> tuple:
     if "error" in data:
         return data, None
 
+    # Enrichissement ATT&CK — mapping CVE/service → techniques + chemin d'attaque
+    from attack_mapper import enrich_scan_result
+    data = enrich_scan_result(data)
+
     chemin = sauvegarder_rapport(ip, data)
     return data, chemin
 

@@ -261,6 +261,250 @@
             word-break: break-all;
         }
 
+        /* ── ATT&CK Section ─────────────────────────────── */
+        .attack-section {
+            margin-top: 2.5rem;
+        }
+
+        .attack-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1.2rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .attack-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .attack-stat {
+            color: var(--muted);
+            font-size: 0.78rem;
+        }
+
+        /* Risk badges */
+        .risk-badge {
+            display: inline-block;
+            padding: 0.2rem 0.7rem;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .risk-critical { background: rgba(248,81,73,0.2);  color: #ff4444; border: 1px solid rgba(248,81,73,0.4); }
+        .risk-high     { background: rgba(219,109,40,0.2); color: var(--orange); border: 1px solid rgba(219,109,40,0.4); }
+        .risk-medium   { background: rgba(210,153,34,0.2); color: var(--yellow); border: 1px solid rgba(210,153,34,0.4); }
+        .risk-low      { background: rgba(63,185,80,0.2);  color: var(--green);  border: 1px solid rgba(63,185,80,0.4); }
+
+        /* Kill chain visuelle */
+        .killchain {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0;
+            margin-bottom: 2rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .kc-step {
+            flex: 1;
+            min-width: 80px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.75rem 0.4rem;
+            border-right: 1px solid var(--border);
+            opacity: 0.35;
+            transition: opacity 0.2s;
+        }
+        .kc-step:last-child { border-right: none; }
+        .kc-step.kc-active  { opacity: 1; }
+
+        .kc-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--border);
+        }
+        .kc-step.kc-active .kc-dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+        .kc-label {
+            font-size: 0.62rem;
+            text-align: center;
+            color: var(--muted);
+            line-height: 1.2;
+        }
+        .kc-step.kc-active .kc-label { color: var(--text); }
+
+        /* Phases */
+        .attack-phase {
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .phase-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.6rem 1rem;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .phase-num {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .phase-tactic {
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            color: var(--accent);
+            background: rgba(88,166,255,0.1);
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+        }
+
+        .phase-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .phase-narrative {
+            padding: 0.6rem 1rem;
+            font-size: 0.8rem;
+            color: var(--muted);
+            border-bottom: 1px solid var(--border);
+            font-style: italic;
+        }
+
+        /* Technique cards */
+        .technique-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .technique-card {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .technique-card:last-child { border-bottom: none; }
+        .technique-card:hover { background: rgba(88,166,255,0.03); }
+
+        .technique-card.conf-high   { border-left: 3px solid var(--red);    }
+        .technique-card.conf-medium { border-left: 3px solid var(--orange); }
+        .technique-card.conf-low    { border-left: 3px solid var(--muted);  }
+
+        .tech-top {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.3rem;
+        }
+
+        .tech-id {
+            font-family: 'Courier New', monospace;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .tech-id:hover { text-decoration: underline; }
+
+        .tech-name {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text);
+            flex: 1;
+        }
+
+        .conf-badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 0.1rem 0.35rem;
+            border-radius: 3px;
+            letter-spacing: 0.04em;
+        }
+        .conf-badge.conf-high   { background: rgba(248,81,73,0.12);  color: var(--red);    }
+        .conf-badge.conf-medium { background: rgba(219,109,40,0.12); color: var(--orange); }
+        .conf-badge.conf-low    { background: rgba(139,148,158,0.12); color: var(--muted); }
+
+        .tech-source {
+            font-size: 0.72rem;
+            color: var(--muted);
+            margin-bottom: 0.25rem;
+        }
+
+        .tech-detection {
+            font-size: 0.75rem;
+            color: #adbac7;
+            line-height: 1.5;
+        }
+
+        .detection-label {
+            color: var(--yellow);
+            font-weight: 600;
+        }
+
+        /* Detection priorities block */
+        .detection-block {
+            margin-top: 1.5rem;
+            background: rgba(88,166,255,0.04);
+            border: 1px solid rgba(88,166,255,0.15);
+            border-radius: 8px;
+            padding: 1rem 1.2rem;
+        }
+
+        .detection-title {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.75rem;
+        }
+
+        .detection-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .detection-list li {
+            font-size: 0.78rem;
+            color: var(--text);
+            line-height: 1.5;
+            padding-left: 1rem;
+            position: relative;
+        }
+
+        .detection-list li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--accent);
+            font-weight: 700;
+        }
+
         /* ── Footer ──────────────────────────────────────── */
         footer {
             margin-top: 3rem;
@@ -379,6 +623,84 @@
     {% endif %}
 {% endif %}
 
+<!-- ── Section ATT&CK ─────────────────────────────────────── -->
+{% if data.attack_summary and data.attack_summary.phases_count > 0 %}
+{% set atk = data.attack_summary %}
+
+<div class="attack-section">
+
+    <!-- En-tête risk level + compteur -->
+    <div class="attack-header">
+        <h2 class="section-title" style="margin-bottom:0; border:none;">Analyse MITRE ATT&amp;CK</h2>
+        <div class="attack-meta">
+            <span class="risk-badge risk-{{ atk.risk_level | lower }}">{{ atk.risk_level }}</span>
+            <span class="attack-stat">{{ atk.phases_count }} phase(s) détectée(s)</span>
+        </div>
+    </div>
+
+    <!-- Kill chain visuelle ─────────────────────── -->
+    <div class="killchain">
+        {% set kc_all = [
+            ("TA0001","Initial Access"),("TA0002","Execution"),("TA0003","Persistence"),
+            ("TA0004","Privilege Esc."),("TA0005","Defense Evasion"),("TA0006","Credential Access"),
+            ("TA0007","Discovery"),("TA0008","Lateral Movement"),("TA0009","Collection"),
+            ("TA0040","Impact")
+        ] %}
+        {% set active_tactics = atk.phases | map(attribute='tactic_id') | list %}
+        {% for tactic_id, tactic_short in kc_all %}
+        <div class="kc-step {% if tactic_id in active_tactics %}kc-active{% endif %}">
+            <div class="kc-dot"></div>
+            <span class="kc-label">{{ tactic_short }}</span>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Phases détaillées ───────────────────────── -->
+    {% for phase in atk.phases %}
+    <div class="attack-phase">
+        <div class="phase-header">
+            <span class="phase-num">Phase {{ phase.phase }}</span>
+            <span class="phase-tactic">{{ phase.tactic_id }}</span>
+            <span class="phase-name">{{ phase.tactic }}</span>
+        </div>
+        {% if phase.narrative %}
+        <p class="phase-narrative">{{ phase.narrative }}</p>
+        {% endif %}
+        <div class="technique-list">
+            {% for tech in phase.techniques %}
+            <div class="technique-card conf-{{ tech.confidence }}">
+                <div class="tech-top">
+                    <a href="{{ tech.url }}" target="_blank" rel="noopener noreferrer" class="tech-id">{{ tech.id }}</a>
+                    <span class="tech-name">{{ tech.name }}</span>
+                    <span class="conf-badge conf-{{ tech.confidence }}">{{ tech.confidence }}</span>
+                </div>
+                <div class="tech-source">Source : {{ tech.source }}</div>
+                {% if tech.detection %}
+                <div class="tech-detection">
+                    <span class="detection-label">Détection :</span> {{ tech.detection }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Priorités de détection ──────────────────── -->
+    {% if atk.detection_priorities %}
+    <div class="detection-block">
+        <h3 class="detection-title">Priorités de détection SIEM</h3>
+        <ul class="detection-list">
+            {% for hint in atk.detection_priorities %}
+            <li>{{ hint }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+</div>
+{% endif %}
+
 <!-- ── Sortie brute Nmap (repliable) ──────────────────────── -->
 {% if data.raw %}
 <details>
@@ -391,7 +713,7 @@
 
 <!-- ── Footer ─────────────────────────────────────────────── -->
 <footer>
-    <span>Scan Vulnérabilité Pro</span>
+    <span>NetAudit</span>
     <span>Généré le {{ data.scan_date }}</span>
 </footer>
 
