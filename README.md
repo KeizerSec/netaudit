@@ -7,9 +7,23 @@
 ![MITRE ATT&CK](https://img.shields.io/badge/MITRE_ATT%26CK-Correlation-E8001D?style=for-the-badge&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)
 
-**Scanner de vulnérabilités réseau avec corrélation MITRE ATT&CK** — donnez une IP, recevez un rapport JSON structuré avec les CVEs détectées et leur traduction en techniques d'attaque concrètes, un chemin d'attaque hypothétique ordonné par kill chain, et un niveau de risque global (CRITICAL / HIGH / MEDIUM / LOW).
+**Scanner de vulnérabilités réseau avec corrélation MITRE ATT&CK.** Donnez une IP, recevez un rapport structuré — ports ouverts, CVEs détectées, techniques d'attaque ATT&CK associées, chemin d'attaque ordonné selon le kill chain, niveau de risque global, priorités de détection SIEM. Trois formats de sortie (HTML interactif, JSON, PDF A4) et une API REST protégée par clé.
 
 > **Usage légal uniquement.** Ne scannez que des hôtes sur lesquels vous avez une autorisation explicite.
+
+---
+
+## Sommaire
+
+- [Ce que fait NetAudit](#ce-que-fait-netaudit)
+- [Démarrage rapide](#démarrage-rapide)
+- [Utilisation](#utilisation)
+- [Endpoints API](#endpoints-api)
+- [Configuration](#configuration)
+- [Fonctionnalités](#fonctionnalités)
+- [Tests](#tests)
+- [Structure du projet](#structure-du-projet)
+- [Limitations](#limitations)
 
 ---
 
@@ -18,20 +32,30 @@
 ```
 Vous donnez une IP  →  NetAudit lance Nmap + Vulners  →  Vous obtenez :
 
-  Couche 1 — Inventaire
-  • Ports ouverts avec services et versions détectées
-  • CVEs associées avec leur score CVSS et un lien de référence
+  Couche 1 — Inventaire réseau
+  • Ports ouverts, protocoles, services et versions (Nmap -sV)
+  • Détection OS et reverse DNS quand disponibles
+  • CVEs associées avec score CVSS et lien vers Vulners
 
-  Couche 2 — Corrélation MITRE ATT&CK (nouveau)
-  • Chaque service → techniques d'attaque liées (confiance haute)
-  • Chaque CVE → techniques d'exploitation probables selon le score CVSS
-  • Un chemin d'attaque hypothétique ordonné selon le kill chain MITRE
-  • Un niveau de risque global : CRITICAL / HIGH / MEDIUM / LOW
-  • Jusqu'à 5 priorités de détection concrètes
+  Couche 2 — Corrélation MITRE ATT&CK
+  • Chaque service → techniques d'attaque liées (confiance haute, 30 services)
+  • Chaque CVE → techniques d'exploitation via CVE→CWE→ATT&CK (3 niveaux)
+  • Chemin d'attaque hypothétique ordonné selon les 14 tactiques du kill chain
+  • Niveau de risque global : CRITICAL / HIGH / MEDIUM / LOW
+  • Jusqu'à 5 priorités de détection SIEM extraites automatiquement
+  • Mitigations concrètes proposées par technique
 
-  Couche 3 — Rapport visuel
-  • Rapport HTML dark-mode avec visualisation du kill chain
-  • Fiches techniques colorisées selon le niveau de confiance
+  Couche 3 — Rapport & exports
+  • Rapport HTML dark-mode : donut CVSS, kill chain cliquable, filtre ports
+  • Export JSON brut pour intégration outils tiers
+  • Export PDF A4 généré via reportlab — archivage, audit, rapport formel
+  • Bouton « Copier en Markdown » pour ticket / PR / rapport d'incident
+
+  Couche 4 — Historique & observabilité
+  • Persistance SQLite — chaque scan survit au redémarrage
+  • Endpoints /history et /history/<ip> pour suivi de tendances
+  • /version — traçabilité de l'image déployée (semver + hash commit)
+  • /health — probe HTTP compatible Docker HEALTHCHECK natif
 ```
 
 ---
@@ -93,12 +117,17 @@ curl http://localhost:5000/scan/192.168.1.1 \
   "status": "ok",
   "ip": "192.168.1.1",
   "host_up": true,
+  "hostname": "router.local",
+  "os_guess": "Linux 5.4",
+  "scan_date": "2026-04-16 12:34:56 UTC",
   "total_vulns": 3,
   "ports": [
     {
       "port": 22,
+      "protocol": "tcp",
+      "state": "open",
       "service": "ssh",
-      "version": "OpenSSH 7.6p1",
+      "version": "OpenSSH 7.6p1 Ubuntu",
       "vulns": [
         {
           "id": "CVE-2021-28041",
@@ -121,6 +150,7 @@ curl http://localhost:5000/scan/192.168.1.1 \
     "phases": [
       {
         "tactic": "Initial Access",
+        "tactic_id": "TA0001",
         "techniques": [ { "id": "T1190", "confidence": "high" } ]
       }
     ],
@@ -133,25 +163,39 @@ curl http://localhost:5000/scan/192.168.1.1 \
 }
 ```
 
-### Consulter le rapport HTML
-
-```
-http://localhost:5000/rapport/192.168.1.1
-```
-
-Le rapport affiche : scores CVSS colorisés, donut SVG de répartition des sévérités, kill chain MITRE ATT&CK cliquable (chaque phase active scroll vers sa section), fiches techniques avec niveau de confiance et mitigations, priorités de détection, filtre de recherche sur les ports, boutons export (JSON / PDF / Markdown via presse-papier), et styles d'impression dédiés.
-
-### Formats d'export
+### Consulter et exporter le rapport
 
 ```bash
-# Rapport HTML interactif (défaut)
-curl http://localhost:5000/rapport/192.168.1.1
+# Rapport HTML interactif (navigateur)
+open http://localhost:5000/rapport/192.168.1.1
 
-# Data JSON complète (dernier scan persisté)
+# Data JSON complète du dernier scan (intégration outils tiers)
 curl http://localhost:5000/rapport/192.168.1.1?format=json
 
 # PDF A4 téléchargeable (audit, archivage)
-curl http://localhost:5000/rapport/192.168.1.1?format=pdf -o rapport.pdf
+curl -OJ http://localhost:5000/rapport/192.168.1.1?format=pdf
+```
+
+Le rapport HTML affiche : donut SVG des sévérités CVSS, kill chain MITRE ATT&CK cliquable (chaque phase active scroll vers sa fiche), fiches techniques colorisées par confiance avec détection et mitigations, priorités de détection SIEM, filtre de recherche sur les ports, boutons d'export (JSON / PDF / Markdown presse-papier), styles d'impression dédiés.
+
+### Consulter l'historique
+
+```bash
+# Liste synthétique des derniers scans (risk_level, total_vulns, date)
+curl http://localhost:5000/history
+
+# Avec une limite explicite (max 500)
+curl http://localhost:5000/history?limit=20
+
+# Historique détaillé d'une IP (toutes les data complètes)
+curl http://localhost:5000/history/192.168.1.1
+```
+
+### Tracer la build déployée
+
+```bash
+curl http://localhost:5000/version
+# → {"name": "NetAudit", "version": "2.1.0", "commit": "0403e03"}
 ```
 
 ---
@@ -166,6 +210,8 @@ curl http://localhost:5000/rapport/192.168.1.1?format=pdf -o rapport.pdf
 | `GET /history/<ip>` | Historique détaillé d'une IP (data complète) | Oui |
 | `GET /version` | Nom, version sémantique, hash commit | Non |
 | `GET /health` | Statut du serveur | Non |
+
+> **Rate limiting.** `GET /scan/<ip>` est limité à 5 requêtes par minute et par IP source (configurable via Flask-Limiter). Les autres endpoints héritent des limites globales `200/jour, 60/heure`.
 
 ---
 
@@ -207,7 +253,7 @@ cp .env.example .env
 - Calcul du niveau de risque global : CRITICAL / HIGH / MEDIUM / LOW
 - 5 priorités de détection extraites automatiquement
 - Mitigations concrètes proposées par technique
-- Base de données locale : 62 techniques ATT&CK, 26 CWEs, 30 services, 40 CVEs connues
+- Base de données locale : 62 techniques ATT&CK, 26 CWEs, 30 services, 39 CVEs connues
 
 **Rapport & UX**
 - Rapport HTML dark-mode avec donut SVG de répartition des sévérités CVSS
@@ -233,14 +279,14 @@ cp .env.example .env
 
 ---
 
-## Lancer les tests
+## Tests
 
 ```bash
 pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-163 tests couvrant : validation IP, parsing Nmap XML, endpoints API (scan, rapport, history, version, health), corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue CVEs connues, déduplication, calcul de risque, chemin d'attaque, intégrité du catalogue), persistance SQLite (insertion, lecture, filtrage), génération PDF (smoke test binaire, robustesse aux données partielles).
+**163 tests** — validation IP, parsing Nmap XML, endpoints API (scan, rapport, history, version, health), corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue CVEs connues, déduplication, calcul de risque, chemin d'attaque, intégrité du catalogue), persistance SQLite (insertion, lecture, filtrage par IP), génération PDF (smoke test binaire, robustesse aux données partielles).
 
 ---
 
@@ -259,7 +305,7 @@ netaudit/
 │   │   ├── techniques.json       # 62 techniques ATT&CK (détection + mitigations)
 │   │   ├── service_mapping.json  # 30 services → techniques (confiance haute)
 │   │   ├── cwe_mapping.json      # 26 CWEs → techniques
-│   │   └── known_cves.json       # 40 CVEs célèbres → CWE (mapping précis)
+│   │   └── known_cves.json       # 39 CVEs célèbres → CWE (mapping précis)
 │   └── templates/
 │       └── rapport.html     # Template Jinja2 — dark-mode, donut, kill chain, filtre, export MD
 ├── tests/
