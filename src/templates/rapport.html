@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapport — {{ data.ip }}</title>
+    <style>
+        :root {
+            --bg:       #0d1117;
+            --surface:  #161b22;
+            --border:   #30363d;
+            --text:     #e6edf3;
+            --muted:    #8b949e;
+            --accent:   #58a6ff;
+            --green:    #3fb950;
+            --yellow:   #d29922;
+            --orange:   #db6d28;
+            --red:      #f85149;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            padding: 2rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        /* ── Header ─────────────────────────────────────── */
+        header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        header .logo {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: -0.02em;
+        }
+
+        header .separator { color: var(--border); }
+
+        header .target-ip {
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.15rem 0.6rem;
+            border-radius: 9999px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+        .badge-up   { background: rgba(63,185,80,0.15);  color: var(--green); border: 1px solid rgba(63,185,80,0.3);  }
+        .badge-down { background: rgba(248,81,73,0.15);  color: var(--red);   border: 1px solid rgba(248,81,73,0.3);  }
+
+        /* ── Meta cards ──────────────────────────────────── */
+        .meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .meta-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.2rem;
+        }
+
+        .meta-card label {
+            display: block;
+            color: var(--muted);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.3rem;
+        }
+
+        .meta-card .value {
+            font-weight: 700;
+            font-size: 1.3rem;
+            color: var(--text);
+        }
+
+        .meta-card .value.accent { color: var(--accent); }
+        .meta-card .value.danger { color: var(--red);    }
+        .meta-card .value.warn   { color: var(--orange); }
+
+        /* ── Section titles ──────────────────────────────── */
+        .section-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.4rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* ── Error banner ────────────────────────────────── */
+        .error-banner {
+            background: rgba(248,81,73,0.08);
+            border: 1px solid rgba(248,81,73,0.3);
+            border-radius: 8px;
+            padding: 1rem 1.2rem;
+            color: var(--red);
+            margin-bottom: 1.5rem;
+        }
+
+        /* ── Ports table ─────────────────────────────────── */
+        .table-wrap {
+            overflow-x: auto;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead th {
+            text-align: left;
+            padding: 0.6rem 1rem;
+            background: var(--surface);
+            color: var(--muted);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            white-space: nowrap;
+        }
+
+        tbody td {
+            padding: 0.65rem 1rem;
+            border-top: 1px solid var(--border);
+            vertical-align: top;
+        }
+
+        tbody tr:hover td { background: rgba(88,166,255,0.04); }
+
+        .port-num {
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .state-open     { color: var(--green);  font-weight: 600; }
+        .state-closed   { color: var(--red);    }
+        .state-filtered { color: var(--yellow); }
+
+        .version-text {
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        /* ── Vuln list ───────────────────────────────────── */
+        .vuln-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .vuln-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+        }
+
+        .cvss {
+            display: inline-block;
+            min-width: 3.2rem;
+            text-align: center;
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 0.72rem;
+            flex-shrink: 0;
+        }
+
+        .cvss-low      { background: rgba(63,185,80,0.15);  color: var(--green);  }
+        .cvss-medium   { background: rgba(210,153,34,0.15); color: var(--yellow); }
+        .cvss-high     { background: rgba(219,109,40,0.15); color: var(--orange); }
+        .cvss-critical { background: rgba(248,81,73,0.15);  color: var(--red);    }
+
+        .vuln-id a {
+            font-family: 'Courier New', monospace;
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .vuln-id a:hover { text-decoration: underline; }
+
+        .no-vuln {
+            color: var(--green);
+            font-size: 0.78rem;
+        }
+
+        .no-ports {
+            color: var(--muted);
+            padding: 1.5rem 0;
+            text-align: center;
+        }
+
+        /* ── Raw output (collapsible) ────────────────────── */
+        details {
+            margin-top: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        details summary {
+            cursor: pointer;
+            padding: 0.65rem 1rem;
+            background: var(--surface);
+            color: var(--muted);
+            font-size: 0.8rem;
+            user-select: none;
+            list-style: none;
+        }
+
+        details summary::-webkit-details-marker { display: none; }
+        details summary::before {
+            content: '▶ ';
+            font-size: 0.65rem;
+            transition: transform 0.15s;
+        }
+        details[open] summary::before { content: '▼ '; }
+
+        .raw-block {
+            padding: 1rem;
+            background: var(--bg);
+        }
+
+        .raw-block pre {
+            font-family: 'Courier New', monospace;
+            font-size: 0.78rem;
+            color: var(--muted);
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* ── Footer ──────────────────────────────────────── */
+        footer {
+            margin-top: 3rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 0.72rem;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────── -->
+<header>
+    <span class="logo">Scan Vulnérabilité Pro</span>
+    <span class="separator">|</span>
+    <span class="target-ip">{{ data.ip }}</span>
+    {% if data.host_up %}
+        <span class="badge badge-up">Host Up</span>
+    {% else %}
+        <span class="badge badge-down">Host Down</span>
+    {% endif %}
+</header>
+
+<!-- ── Meta cards ─────────────────────────────────────────── -->
+<div class="meta">
+    <div class="meta-card">
+        <label>Adresse IP</label>
+        <div class="value accent" style="font-size:1rem; font-family:monospace;">{{ data.ip }}</div>
+    </div>
+    <div class="meta-card">
+        <label>Date du scan</label>
+        <div class="value" style="font-size:0.85rem;">{{ data.scan_date }}</div>
+    </div>
+    <div class="meta-card">
+        <label>Ports détectés</label>
+        <div class="value accent">{{ data.ports | length }}</div>
+    </div>
+    <div class="meta-card">
+        <label>Vulnérabilités</label>
+        {% if data.total_vulns > 0 %}
+            <div class="value danger">{{ data.total_vulns }}</div>
+        {% else %}
+            <div class="value" style="color: var(--green);">0</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ── Erreur éventuelle ───────────────────────────────────── -->
+{% if data.error %}
+<div class="error-banner">
+    <strong>Erreur :</strong> {{ data.error }}
+</div>
+{% endif %}
+
+<!-- ── Tableau des ports ───────────────────────────────────── -->
+{% if data.ports %}
+<h2 class="section-title">Ports &amp; Vulnérabilités</h2>
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Port</th>
+                <th>Proto</th>
+                <th>État</th>
+                <th>Service</th>
+                <th>Version</th>
+                <th>Vulnérabilités</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for port in data.ports %}
+            <tr>
+                <td class="port-num">{{ port.port }}</td>
+                <td>{{ port.protocol }}</td>
+                <td class="state-{{ port.state }}">{{ port.state }}</td>
+                <td>{{ port.service }}</td>
+                <td class="version-text">{{ port.version if port.version else "—" }}</td>
+                <td>
+                    {% if port.vulns %}
+                    <ul class="vuln-list">
+                        {% for v in port.vulns %}
+                        <li class="vuln-item">
+                            {% set score = v.score | float %}
+                            {% if score >= 9.0 %}
+                                <span class="cvss cvss-critical">{{ "%.1f" | format(score) }}</span>
+                            {% elif score >= 7.0 %}
+                                <span class="cvss cvss-high">{{ "%.1f" | format(score) }}</span>
+                            {% elif score >= 4.0 %}
+                                <span class="cvss cvss-medium">{{ "%.1f" | format(score) }}</span>
+                            {% else %}
+                                <span class="cvss cvss-low">{{ "%.1f" | format(score) }}</span>
+                            {% endif %}
+                            <span class="vuln-id">
+                                <a href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ v.id }}</a>
+                            </span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <span class="no-vuln">Aucune vulnérabilité détectée</span>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    {% if not data.error %}
+    <p class="no-ports">Aucun port ouvert détecté sur cet hôte.</p>
+    {% endif %}
+{% endif %}
+
+<!-- ── Sortie brute Nmap (repliable) ──────────────────────── -->
+{% if data.raw %}
+<details>
+    <summary>Sortie brute Nmap</summary>
+    <div class="raw-block">
+        <pre>{{ data.raw }}</pre>
+    </div>
+</details>
+{% endif %}
+
+<!-- ── Footer ─────────────────────────────────────────────── -->
+<footer>
+    <span>Scan Vulnérabilité Pro</span>
+    <span>Généré le {{ data.scan_date }}</span>
+</footer>
+
+</body>
+</html>
