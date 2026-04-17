@@ -39,7 +39,7 @@ Vous donnez une IP  →  NetAudit lance Nmap + Vulners  →  Vous obtenez :
   • CVEs associées avec score CVSS et lien vers Vulners
 
   Couche 2 — Corrélation MITRE ATT&CK
-  • Chaque service → techniques d'attaque liées (confiance haute, 30 services)
+  • Chaque service → techniques d'attaque liées (confiance haute, 47 services)
   • Chaque CVE → techniques d'exploitation via CVE→CWE→ATT&CK (3 niveaux)
   • Chemin d'attaque hypothétique ordonné selon les 14 tactiques du kill chain
   • Niveau de risque global : CRITICAL / HIGH / MEDIUM / LOW
@@ -295,7 +295,7 @@ curl http://localhost:5000/history/192.168.1.1
 
 ```bash
 curl http://localhost:5000/version
-# → {"name": "NetAudit", "version": "2.5.0", "commit": "0403e03"}
+# → {"name": "NetAudit", "version": "2.5.0", "commit": "abc1234"}
 ```
 
 ---
@@ -346,7 +346,7 @@ cp .env.example .env
 - Cache LRU — évite de rescanner une même IP inutilement
 
 **Corrélation MITRE ATT&CK**
-- Mapping service/port → techniques (confiance haute, 30 services couverts)
+- Mapping service/port → techniques (confiance haute, 47 services couverts)
 - Mapping CVE → techniques en trois couches complémentaires :
   - Catalogue de CVEs célèbres (Log4Shell, EternalBlue, Heartbleed, …) → CWE → techniques précises
   - Mapping CWE → techniques (26 CWEs cataloguées)
@@ -355,7 +355,7 @@ cp .env.example .env
 - Calcul du niveau de risque global : CRITICAL / HIGH / MEDIUM / LOW
 - 5 priorités de détection extraites automatiquement
 - Mitigations concrètes proposées par technique
-- Base de données locale : **79 techniques ATT&CK**, 26 CWEs, **47 services**, 40 CVEs connues
+- Base de données locale : **79 techniques ATT&CK**, 26 CWEs, **47 services**, 39 CVEs connues
 - Couverture 2.5.0 renforcée — Active Directory (Kerberoasting, AS-REP, LLMNR/AITM, Pass-the-Hash/Ticket, Domain Trust Discovery, GPO abuse), cloud native (container admin / deploy, etcd, Vault, Consul), IoT/OT (MQTT, Modbus), management out-of-band (IPMI/BMC, WinRM), ransomware (Inhibit System Recovery)
 
 **Priorisation réelle (EPSS + CISA KEV)**
@@ -461,16 +461,16 @@ netaudit/
 │   │   ├── techniques.json       # 79 techniques ATT&CK (détection + mitigations, AD + cloud + IoT/OT)
 │   │   ├── service_mapping.json  # 47 services → techniques (confiance haute)
 │   │   ├── cwe_mapping.json      # 26 CWEs → techniques
-│   │   └── known_cves.json       # 40 CVEs célèbres → CWE (mapping précis)
+│   │   └── known_cves.json       # 39 CVEs célèbres → CWE (mapping précis)
 │   └── templates/
 │       └── rapport.html     # Template Jinja2 — dark-mode, donut, kill chain, filtre, export MD
 ├── tests/
 │   ├── test_scan.py         # Validation IP, parsing Nmap XML
 │   ├── test_webapp.py       # Endpoints API, auth, formats d'export, historique
-│   ├── test_attack_mapper.py # Corrélation ATT&CK (81 cas)
+│   ├── test_attack_mapper.py # Corrélation ATT&CK (117 cas)
 │   ├── test_history.py      # Persistance SQLite (14 cas)
 │   ├── test_exports.py      # Génération PDF (6 cas)
-│   ├── test_prioritizer.py  # Priorisation EPSS + KEV (33 cas)
+│   ├── test_prioritizer.py  # Priorisation EPSS + KEV (35 cas)
 │   ├── test_profiler.py     # Classification rôle + posture (47 cas)
 │   └── test_baseline.py     # Diff scans + alertes de dérive (40 cas)
 ├── .env.example             # Modèle de configuration
