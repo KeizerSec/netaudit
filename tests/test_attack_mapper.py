@@ -23,6 +23,7 @@ from attack_mapper import (
     _TECHNIQUES,
     _KILL_CHAIN,
     _TACTIC_NARRATIVES,
+    _SERVICE_MAPPING,
 )
 
 
@@ -490,8 +491,11 @@ class TestCatalogIntegrity:
     """Garde-fous sur techniques.json et le kill chain — détecte les régressions
     lors de l'ajout ou du nettoyage du catalogue."""
 
-    def test_catalog_contient_au_moins_60_techniques(self):
-        assert len(_TECHNIQUES) >= 60
+    def test_catalog_contient_au_moins_75_techniques(self):
+        # Le catalogue a été étendu en 2.5.0 (62 → 79). On garde une marge de
+        # sécurité pour tolérer de petits nettoyages ultérieurs, mais tout
+        # retour sous 75 indique une régression majeure.
+        assert len(_TECHNIQUES) >= 75
 
     def test_toutes_techniques_ont_champs_obligatoires(self):
         required = {"id", "name", "tactic_id", "tactic_name",
@@ -528,6 +532,50 @@ class TestCatalogIntegrity:
         # exposer dans le dict de sortie de _map_service_techniques
         techs = _map_service_techniques(22, "ssh")
         assert any(t.get("mitigations", "").strip() for t in techs)
+
+    @pytest.mark.parametrize("tid", [
+        # Techniques AD / Windows ajoutées en 2.5.0 — garde-fou anti-régression
+        "T1557", "T1558", "T1558.003", "T1558.004", "T1187", "T1550",
+        "T1482", "T1087", "T1484.001", "T1134", "T1021.006",
+        # Techniques cloud / container
+        "T1609", "T1610",
+        # Autres expansions
+        "T1505.001", "T1105", "T1490", "T1056",
+    ])
+    def test_techniques_prioritaires_2_5_0_presentes(self, tid):
+        assert tid in _TECHNIQUES, f"{tid} absent du catalogue 2.5.0"
+
+
+class TestServiceCatalogIntegrity:
+    """Garde-fous sur service_mapping.json — détecte les régressions sur la
+    couverture des services scannés."""
+
+    def test_catalog_contient_au_moins_45_services(self):
+        # 2.5.0 ajoute ~16 services modernes (cloud, AD-Kerberos, IoT/OT) :
+        # de 30 à 47. Un retour sous 45 indique une régression.
+        assert len(_SERVICE_MAPPING) >= 45
+
+    @pytest.mark.parametrize("service", [
+        # Kerberos / AD
+        "kerberos", "globalcatalog", "winrm", "rpcbind",
+        # Cloud / secrets
+        "etcd", "vault", "consul", "kibana",
+        # Mgmt / data
+        "splunk", "rabbitmq-mgmt", "activemq", "zookeeper", "hadoop",
+        # Hardware / IoT / ICS
+        "ipmi", "mqtt", "modbus", "x11",
+    ])
+    def test_services_prioritaires_2_5_0_presents(self, service):
+        assert service in _SERVICE_MAPPING, f"Service {service} absent du mapping 2.5.0"
+
+    def test_toutes_references_techniques_valides(self):
+        """Chaque technique référencée dans service_mapping doit exister dans techniques.json."""
+        missing = []
+        for svc, info in _SERVICE_MAPPING.items():
+            for tid in info.get("techniques", []):
+                if tid not in _TECHNIQUES:
+                    missing.append(f"{svc} → {tid}")
+        assert not missing, f"Références cassées : {missing}"
 
 
 class TestEnrichScanResult:

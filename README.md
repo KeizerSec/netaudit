@@ -355,7 +355,8 @@ cp .env.example .env
 - Calcul du niveau de risque global : CRITICAL / HIGH / MEDIUM / LOW
 - 5 priorités de détection extraites automatiquement
 - Mitigations concrètes proposées par technique
-- Base de données locale : 62 techniques ATT&CK, 26 CWEs, 30 services, 39 CVEs connues
+- Base de données locale : **79 techniques ATT&CK**, 26 CWEs, **47 services**, 40 CVEs connues
+- Couverture 2.5.0 renforcée — Active Directory (Kerberoasting, AS-REP, LLMNR/AITM, Pass-the-Hash/Ticket, Domain Trust Discovery, GPO abuse), cloud native (container admin / deploy, etcd, Vault, Consul), IoT/OT (MQTT, Modbus), management out-of-band (IPMI/BMC, WinRM), ransomware (Inhibit System Recovery)
 
 **Priorisation réelle (EPSS + CISA KEV)**
 - Flag CISA KEV — chaque CVE croisée avec le catalogue officiel *Known Exploited Vulnerabilities*
@@ -436,7 +437,7 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-**285 tests** — validation IP, parsing Nmap XML, endpoints API (scan, rapport, history, version, health), corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue CVEs connues, déduplication, calcul de risque, chemin d'attaque, intégrité du catalogue), persistance SQLite (insertion, lecture, filtrage par IP), génération PDF (smoke test binaire, robustesse aux données partielles), priorisation EPSS + KEV (formule de score, seuils de niveau, cache TTL, batch API, fallback offline, dégradation sur cache périmé, **conditional GET `If-Modified-Since` + réponse `304 Not Modified`**), détection contextuelle (classification 12 rôles, 12 règles anti-pattern avec frontières regex pour éviter les faux positifs, scénarios d'intégration), baseline historique (diff ports / versions / CVEs / findings / posture / rôle, niveau d'alerte par catégorie, escalade KEV, scénarios complets de compromission et de remédiation).
+**321 tests** — validation IP, parsing Nmap XML, endpoints API (scan, rapport, history, version, health), corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue CVEs connues, déduplication, calcul de risque, chemin d'attaque, intégrité du catalogue **technique + services**, garde-fous anti-régression sur les 17 techniques et 17 services ajoutés en 2.5.0), persistance SQLite (insertion, lecture, filtrage par IP), génération PDF (smoke test binaire, robustesse aux données partielles), priorisation EPSS + KEV (formule de score, seuils de niveau, cache TTL, batch API, fallback offline, dégradation sur cache périmé, **conditional GET `If-Modified-Since` + réponse `304 Not Modified`**), détection contextuelle (classification 12 rôles, 12 règles anti-pattern avec frontières regex pour éviter les faux positifs, scénarios d'intégration), baseline historique (diff ports / versions / CVEs / findings / posture / rôle, niveau d'alerte par catégorie, escalade KEV, scénarios complets de compromission et de remédiation).
 
 La CI GitHub Actions exécute `pytest` sur **Python 3.11 + 3.12** et valide le `docker build` à chaque push sur `main` et chaque pull request.
 
@@ -457,10 +458,10 @@ netaudit/
 │   ├── exports.py           # Génération PDF via reportlab
 │   ├── version.py           # Version sémantique + hash commit
 │   ├── data/
-│   │   ├── techniques.json       # 62 techniques ATT&CK (détection + mitigations)
-│   │   ├── service_mapping.json  # 30 services → techniques (confiance haute)
+│   │   ├── techniques.json       # 79 techniques ATT&CK (détection + mitigations, AD + cloud + IoT/OT)
+│   │   ├── service_mapping.json  # 47 services → techniques (confiance haute)
 │   │   ├── cwe_mapping.json      # 26 CWEs → techniques
-│   │   └── known_cves.json       # 39 CVEs célèbres → CWE (mapping précis)
+│   │   └── known_cves.json       # 40 CVEs célèbres → CWE (mapping précis)
 │   └── templates/
 │       └── rapport.html     # Template Jinja2 — dark-mode, donut, kill chain, filtre, export MD
 ├── tests/

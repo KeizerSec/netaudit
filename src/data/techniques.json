@@ -631,5 +631,176 @@
     "detection": "Alerter sur les écritures raw device (/dev/sda) depuis des processus non-système. Signal MBR overwrite via EDR.",
     "mitigations": "Bitlocker/LUKS avec récupération. Image système hors-ligne. Restriction des droits sur raw devices.",
     "url": "https://attack.mitre.org/techniques/T1561/"
+  },
+
+  "T1557": {
+    "id": "T1557",
+    "name": "Adversary-in-the-Middle",
+    "tactic_id": "TA0006",
+    "tactic_name": "Credential Access",
+    "description": "Interception de trafic via LLMNR/NBT-NS poisoning, ARP spoofing, DHCPv6 ou DNS spoofing pour capturer des hash NetNTLM ou des credentials transmis en clair. Technique systématique en pentest AD (Responder, mitm6, Inveigh).",
+    "detection": "Alerter sur le trafic LLMNR/NBT-NS massif depuis un hôte non-serveur. Monitorer les réponses DHCPv6 inattendues. SIEM : corrélation entre broadcasts et multiples authentifications NTLM échouées.",
+    "mitigations": "Désactiver LLMNR (GPO) et NBT-NS (NetBIOS over TCP/IP). Imposer SMB signing. Segmentation L2 (VLAN + port-security). Blocage DHCPv6 si IPv6 non utilisé.",
+    "url": "https://attack.mitre.org/techniques/T1557/"
+  },
+  "T1558": {
+    "id": "T1558",
+    "name": "Steal or Forge Kerberos Tickets",
+    "tactic_id": "TA0006",
+    "tactic_name": "Credential Access",
+    "description": "Vol ou forge de tickets Kerberos (TGT, TGS) pour usurper des identités AD. Inclut Kerberoasting, AS-REP Roasting, Golden Ticket, Silver Ticket.",
+    "detection": "Monitorer les Event IDs 4768/4769/4771 avec types de chiffrement faibles (RC4, DES). Alerter sur des TGS demandés pour des SPN rares. Détecter des TGT de durée anormale (Golden Ticket).",
+    "mitigations": "AES-only dans la GPO Kerberos. Mots de passe longs (>25 car.) pour comptes de service. Rotation du krbtgt deux fois d'affilée après compromission suspectée.",
+    "url": "https://attack.mitre.org/techniques/T1558/"
+  },
+  "T1558.003": {
+    "id": "T1558.003",
+    "name": "Steal or Forge Kerberos Tickets: Kerberoasting",
+    "tactic_id": "TA0006",
+    "tactic_name": "Credential Access",
+    "description": "Demande de TGS pour des comptes de service (SPN) puis crack offline du hash pour récupérer le mot de passe en clair. Efficace contre les services avec mot de passe faible.",
+    "detection": "Event ID 4769 avec encryption type 0x17 (RC4) pour un compte utilisateur ayant un SPN. Volume anormal de TGS requests depuis un même hôte.",
+    "mitigations": "Forcer AES128/256 (msDS-SupportedEncryptionTypes). Mots de passe de comptes de service ≥ 25 caractères aléatoires. Utiliser des gMSA (Group Managed Service Accounts) quand possible.",
+    "url": "https://attack.mitre.org/techniques/T1558/003/"
+  },
+  "T1558.004": {
+    "id": "T1558.004",
+    "name": "Steal or Forge Kerberos Tickets: AS-REP Roasting",
+    "tactic_id": "TA0006",
+    "tactic_name": "Credential Access",
+    "description": "Attaque sur les comptes avec préauthentification Kerberos désactivée (UF_DONT_REQUIRE_PREAUTH). Le KDC renvoie un AS-REP chiffré avec la clé dérivée du mot de passe — crack offline possible.",
+    "detection": "Event 4768 AS-REQ sans préauth. Audit LDAP : comptes ayant userAccountControl avec le flag DONT_REQ_PREAUTH.",
+    "mitigations": "Activer la préauthentification Kerberos sur tous les comptes. Auditer régulièrement `Get-ADUser -Filter 'DoesNotRequirePreAuth -eq $true'`.",
+    "url": "https://attack.mitre.org/techniques/T1558/004/"
+  },
+  "T1187": {
+    "id": "T1187",
+    "name": "Forced Authentication",
+    "tactic_id": "TA0006",
+    "tactic_name": "Credential Access",
+    "description": "Forcer une machine à s'authentifier sur un hôte contrôlé par l'attaquant pour capturer ou relayer le hash NetNTLM (SMB relay, PetitPotam, PrinterBug).",
+    "detection": "Alerter sur RPC calls EFSRPC (MS-EFSR) et MS-RPRN non usuels. Signal SMB authentication sortante d'un DC vers un hôte non-DC.",
+    "mitigations": "Activer SMB signing partout. Désactiver l'authentification NTLM si possible. Bloquer l'accès aux endpoints RPC EFSRPC / PrintNightmare. Extended Protection for Authentication (EPA) sur les CA web.",
+    "url": "https://attack.mitre.org/techniques/T1187/"
+  },
+  "T1550": {
+    "id": "T1550",
+    "name": "Use Alternate Authentication Material",
+    "tactic_id": "TA0008",
+    "tactic_name": "Lateral Movement",
+    "description": "Utilisation d'un hash NTLM (Pass-the-Hash), d'un ticket Kerberos (Pass-the-Ticket) ou d'un cookie/token volé pour s'authentifier sans connaître le mot de passe.",
+    "detection": "Correlation de logons NTLM entre machines avec des LogonIDs inhabituels. Détection de tickets Kerberos réutilisés (mimikatz, Rubeus). Event ID 4624 LogonType 3 depuis IP anormale.",
+    "mitigations": "Protected Users group pour les admins. Credential Guard (Windows). LAPS sur les comptes administrateur local. Restreindre NTLM via GPO.",
+    "url": "https://attack.mitre.org/techniques/T1550/"
+  },
+  "T1482": {
+    "id": "T1482",
+    "name": "Domain Trust Discovery",
+    "tactic_id": "TA0007",
+    "tactic_name": "Discovery",
+    "description": "Énumération des relations de confiance entre domaines AD (trusts) pour planifier un mouvement latéral inter-forêts. Outils : BloodHound, `nltest /trusted_domains`, `Get-ADTrust`.",
+    "detection": "Alerter sur les requêtes LDAP ciblant `trustedDomain` depuis des hôtes non-admin. Monitorer les appels Get-ADTrust / nltest depuis des postes utilisateurs.",
+    "mitigations": "Restreindre les lectures LDAP sur les objets trust. Segmentation réseau inter-forêts. Moniter BloodHound-style queries (SharpHound activity).",
+    "url": "https://attack.mitre.org/techniques/T1482/"
+  },
+  "T1087": {
+    "id": "T1087",
+    "name": "Account Discovery",
+    "tactic_id": "TA0007",
+    "tactic_name": "Discovery",
+    "description": "Énumération des comptes utilisateurs locaux ou de domaine pour identifier des cibles privilégiées. Technique préalable au Kerberoasting, spray password, etc.",
+    "detection": "Monitorer les queries SAMR / LDAP massives depuis un même hôte. Alerter sur `net user /domain`, `Get-ADUser -Filter *` depuis des postes utilisateurs.",
+    "mitigations": "Restreindre SAMR anonymous (Network access: Restrict clients allowed to make remote calls to SAM). Limitation LDAP query rate. Honeypot AD accounts.",
+    "url": "https://attack.mitre.org/techniques/T1087/"
+  },
+  "T1484.001": {
+    "id": "T1484.001",
+    "name": "Domain Policy Modification: Group Policy Modification",
+    "tactic_id": "TA0004",
+    "tactic_name": "Privilege Escalation",
+    "description": "Modification d'une GPO (ou de ses ACLs) pour déployer un payload, ajouter un compte admin ou désactiver les contrôles de sécurité à grande échelle dans le domaine.",
+    "detection": "Audit SACL sur SYSVOL et sur les objets `groupPolicyContainer`. Event ID 5136 (LDAP object modified) sur une GPO. Monitoring des modifications de `gpLink`, `gpOptions`.",
+    "mitigations": "ACLs GPO strictes — seuls les admins de domaine peuvent modifier. Monitoring SYSVOL (FIM). Revue périodique des permissions GPO via BloodHound / PingCastle.",
+    "url": "https://attack.mitre.org/techniques/T1484/001/"
+  },
+  "T1134": {
+    "id": "T1134",
+    "name": "Access Token Manipulation",
+    "tactic_id": "TA0004",
+    "tactic_name": "Privilege Escalation",
+    "description": "Duplication ou vol de token d'accès Windows pour exécuter du code sous une autre identité (SYSTEM, TrustedInstaller, admin de domaine). Base de techniques comme `steal_token` (Cobalt Strike), incognito (Metasploit).",
+    "detection": "Sysmon Event ID 1 avec ParentProcessId incohérent. API calls `DuplicateTokenEx`, `ImpersonateLoggedOnUser` non signés. EDR : chaînes de processus où l'utilisateur effectif diffère du logon original.",
+    "mitigations": "Restreindre `SeImpersonatePrivilege` / `SeAssignPrimaryTokenPrivilege`. Protected Process Light (PPL) sur LSASS. Credential Guard.",
+    "url": "https://attack.mitre.org/techniques/T1134/"
+  },
+  "T1609": {
+    "id": "T1609",
+    "name": "Container Administration Command",
+    "tactic_id": "TA0002",
+    "tactic_name": "Execution",
+    "description": "Exécution de commandes via l'API d'un orchestrateur de conteneurs (`kubectl exec`, `docker exec`) pour lancer du code dans un pod/container compromis ou pivoter.",
+    "detection": "Audit log Kubernetes (`kubectl exec`, `pods/exec`). Monitoring Docker daemon (`docker exec`) via Falco/Tetragon. Alertes sur exec depuis des ServiceAccounts non-humains.",
+    "mitigations": "RBAC strict (pas de `pods/exec` accordé aux SA applicatifs). API server auditlog policy niveau Request. mTLS sur docker.sock.",
+    "url": "https://attack.mitre.org/techniques/T1609/"
+  },
+  "T1610": {
+    "id": "T1610",
+    "name": "Deploy Container",
+    "tactic_id": "TA0002",
+    "tactic_name": "Execution",
+    "description": "Déploiement d'un conteneur attaquant (image tierce ou crafted) pour exécuter du code — souvent monté avec `privileged: true` ou le socket Docker pour évasion.",
+    "detection": "Audit kube-apiserver sur `create/pods` avec `securityContext.privileged=true` ou volume `/var/run/docker.sock`. Falco rules container-drift.",
+    "mitigations": "PodSecurity Standards `restricted`. Admission controller (OPA/Gatekeeper, Kyverno) bloquant privileged + hostPath sensibles. Image signing (Cosign, Notary).",
+    "url": "https://attack.mitre.org/techniques/T1610/"
+  },
+  "T1505.001": {
+    "id": "T1505.001",
+    "name": "Server Software Component: SQL Stored Procedures",
+    "tactic_id": "TA0003",
+    "tactic_name": "Persistence",
+    "description": "Installation d'une procédure stockée malveillante dans un SGBD (MSSQL `xp_cmdshell`, procédures CLR, triggers cachés) pour maintenir un accès ou déclencher du code à distance.",
+    "detection": "Audit DDL sur les procédures stockées CREATE/ALTER. Alerter sur `xp_cmdshell` réactivé. Baseline périodique des procédures système vs réelles.",
+    "mitigations": "Désactiver `xp_cmdshell` et CLR integration sur MSSQL. Comptes DB avec moindre privilège. Séparation stricte DBA / application users.",
+    "url": "https://attack.mitre.org/techniques/T1505/001/"
+  },
+  "T1105": {
+    "id": "T1105",
+    "name": "Ingress Tool Transfer",
+    "tactic_id": "TA0011",
+    "tactic_name": "Command and Control",
+    "description": "Téléchargement d'outils supplémentaires depuis l'extérieur (wget, curl, certutil, bitsadmin, PowerShell `Invoke-WebRequest`) pour étendre les capacités sur l'hôte compromis.",
+    "detection": "Sysmon Event 3 (network connect) depuis `certutil.exe`, `bitsadmin.exe`, `mshta.exe`. Alertes proxy sur downloads d'exécutables depuis des domaines récents (< 30 jours).",
+    "mitigations": "AppLocker / WDAC bloquant les LOLBins non nécessaires. Proxy filtrant les MIME `application/x-dosexec`. DNS RPZ sur domaines newly-registered.",
+    "url": "https://attack.mitre.org/techniques/T1105/"
+  },
+  "T1490": {
+    "id": "T1490",
+    "name": "Inhibit System Recovery",
+    "tactic_id": "TA0040",
+    "tactic_name": "Impact",
+    "description": "Suppression des shadow copies (`vssadmin delete shadows`), désactivation des sauvegardes et du boot recovery pour empêcher la restauration après ransomware. Comportement signature de la plupart des ransomware modernes.",
+    "detection": "Alerter en temps réel sur `vssadmin delete shadows`, `wbadmin delete catalog`, `bcdedit /set {default} recoveryenabled no`, `wmic shadowcopy delete`. Event ID 524 (backup catalog deleted).",
+    "mitigations": "Sauvegardes immutables hors-ligne ou object-lock (S3 Object Lock, Veeam Hardened Repo). Restriction WMI et vssadmin aux admins seulement. EDR bloquant ces commandes par défaut.",
+    "url": "https://attack.mitre.org/techniques/T1490/"
+  },
+  "T1021.006": {
+    "id": "T1021.006",
+    "name": "Remote Services: Windows Remote Management",
+    "tactic_id": "TA0008",
+    "tactic_name": "Lateral Movement",
+    "description": "Utilisation de WinRM / PowerShell Remoting (ports 5985/5986) pour exécuter des commandes à distance sur des hôtes Windows. Vecteur natif Microsoft, souvent autorisé par défaut pour les admins.",
+    "detection": "Event ID 4624 LogonType 3 couplé à WsmProvHost.exe comme processus parent. Sysmon Event 1 sur `winrm.cmd` / `Enter-PSSession` depuis des postes non-admin. Corrélation : authentification WinRM depuis une source inhabituelle.",
+    "mitigations": "Restreindre WinRM aux seuls admins via GPO. JEA (Just Enough Administration) pour les rôles de délégation. Activer les logs PowerShell Module et ScriptBlock.",
+    "url": "https://attack.mitre.org/techniques/T1021/006/"
+  },
+  "T1056": {
+    "id": "T1056",
+    "name": "Input Capture",
+    "tactic_id": "TA0006",
+    "tactic_name": "Credential Access",
+    "description": "Capture des entrées utilisateur (keylogging, capture de tampon clavier, GUI spoofing) pour récupérer des credentials et autres informations sensibles saisies. Sur X11 exposé, accessible sans compromission préalable via xspy / xinput.",
+    "detection": "Audit kernel level des API keylogging (SetWindowsHookEx, GetAsyncKeyState). Sur Linux, surveiller les connexions X11 non locales (`xhost +`) et l'utilisation de xinput test.",
+    "mitigations": "Désactiver l'écoute X11 réseau (`-nolisten tcp`). Préférer Wayland à X11 sur postes modernes. EDR signant les API de hooking clavier. MFA pour contrer la capture de mots de passe.",
+    "url": "https://attack.mitre.org/techniques/T1056/"
   }
 }

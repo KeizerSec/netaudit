@@ -28,5 +28,27 @@
   "tomcat":        { "ports": [8080, 8009],     "techniques": ["T1190", "T1505.003"], "note": "Tomcat avec manager exposé — déploiement de WAR malveillant possible" },
   "memcached":     { "ports": [11211],          "techniques": ["T1190", "T1082"], "note": "Memcached sans auth — lecture/écriture de toutes les données en cache" },
   "cassandra":     { "ports": [9042, 9160],     "techniques": ["T1190", "T1083"], "note": "Cassandra souvent exposé sans authentification" },
-  "rsync":         { "ports": [873],            "techniques": ["T1005", "T1083"], "note": "rsync exposé peut permettre de récupérer ou d'écraser des fichiers à distance" }
+  "rsync":         { "ports": [873],            "techniques": ["T1005", "T1083"], "note": "rsync exposé peut permettre de récupérer ou d'écraser des fichiers à distance" },
+
+  "kerberos":      { "ports": [88, 464],        "techniques": ["T1558", "T1558.003", "T1558.004", "T1078"], "note": "KDC exposé — cible directe pour Kerberoasting, AS-REP roasting et énumération d'SPNs" },
+  "globalcatalog": { "ports": [3268, 3269],     "techniques": ["T1087", "T1482", "T1087.002"], "note": "Global Catalog AD — énumération inter-domaines et cartographie de la forêt" },
+  "winrm":         { "ports": [5985, 5986],     "techniques": ["T1021.006", "T1059.001", "T1133"], "note": "Windows Remote Management — vecteur de mouvement latéral natif via PowerShell Remoting" },
+  "rpcbind":       { "ports": [111],            "techniques": ["T1046", "T1083"], "note": "Portmapper Unix — expose la liste des services RPC (NFS, NIS, ypserv) et leurs ports dynamiques" },
+
+  "etcd":          { "ports": [2379, 2380],     "techniques": ["T1190", "T1552", "T1555"], "note": "Base clé-valeur de Kubernetes — stocke les Secrets en clair si non chiffrés. Accès = compromission totale du cluster" },
+  "vault":         { "ports": [8200, 8201],     "techniques": ["T1190", "T1552", "T1555"], "note": "HashiCorp Vault — coffre à secrets. Un token root ou un sceau compromis expose tous les secrets de l'organisation" },
+  "consul":        { "ports": [8500, 8300, 8301], "techniques": ["T1190", "T1552", "T1046"], "note": "Consul sans ACL — service discovery et KV exposés, souvent source de credentials applicatifs" },
+  "kibana":        { "ports": [5601],           "techniques": ["T1190", "T1083", "T1059"], "note": "Kibana — interface ES, historiquement CVE RCE (CVE-2019-7609). Souvent sans auth devant ES public" },
+
+  "splunk":        { "ports": [8000, 8089, 8088], "techniques": ["T1190", "T1078", "T1005"], "note": "Splunk Web + API management — extraction de logs sensibles et RCE via apps malveillantes (Splunk Universal Forwarder aussi vecteur)" },
+  "rabbitmq-mgmt": { "ports": [15672, 15671],   "techniques": ["T1190", "T1078", "T1005"], "note": "Console management RabbitMQ — credentials par défaut guest/guest fréquents, accès aux queues de messages" },
+  "activemq":      { "ports": [61616, 8161],    "techniques": ["T1190", "T1078"], "note": "Apache ActiveMQ — CVE-2023-46604 RCE critique via OpenWire. Console admin souvent avec creds par défaut" },
+  "zookeeper":     { "ports": [2181, 2888, 3888], "techniques": ["T1190", "T1552", "T1083"], "note": "ZooKeeper — utilisé par Hadoop/Kafka/Solr, expose configs et ACLs si non protégé" },
+  "hadoop":        { "ports": [9870, 50070, 8088, 9000], "techniques": ["T1190", "T1083", "T1005"], "note": "Hadoop NameNode / ResourceManager — accès WebHDFS permet lecture/écriture HDFS et parfois RCE via YARN (CVE-2017-7669)" },
+
+  "ipmi":          { "ports": [623],            "techniques": ["T1190", "T1078", "T1133"], "note": "IPMI / BMC — management out-of-band niveau matériel. CVE-2013-4786 cipher 0 + creds admin/admin fréquents = contrôle total du serveur" },
+
+  "mqtt":          { "ports": [1883, 8883],     "techniques": ["T1190", "T1078", "T1040"], "note": "Broker MQTT (IoT) — souvent sans authentification, sniff et injection de messages sur l'ensemble des devices connectés" },
+  "modbus":        { "ports": [502],            "techniques": ["T1190", "T1046", "T1040"], "note": "Protocole ICS/OT historique — aucun contrôle d'authentification, toute commande de lecture/écriture est acceptée" },
+  "x11":           { "ports": [6000, 6001, 6002, 6003], "techniques": ["T1021.005", "T1056", "T1113"], "note": "Serveur X11 exposé — keylogging, screenshot et contrôle clavier/souris à distance (xspy, xdotool)" }
 }
