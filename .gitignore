@@ -41,3 +41,8 @@ htmlcov/
 
 # Claude Code
 .claude/
+
+# Notes personnelles / transcripts de session (historique, non versionné)
+P1/
+*.txt
+!requirements*.txt

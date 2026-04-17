@@ -196,6 +196,13 @@ def _scan_cached(ip: str) -> dict:
     Exécute Nmap avec sortie XML et retourne le résultat parsé.
     Les exceptions levées ici ne sont PAS mises en cache par lru_cache,
     ce qui garantit qu'un échec relancera un vrai scan à la prochaine tentative.
+
+    Portée du cache — `lru_cache` est **in-process** : chaque worker Gunicorn a
+    son propre cache. Avec `--workers 2` (défaut), deux scans de la même IP
+    peuvent retomber sur des workers différents et relancer un vrai Nmap.
+    C'est acceptable pour un déploiement single-host (évite juste les
+    re-scans immédiats). Pour un scale horizontal ou un partage strict entre
+    workers, migrer vers un cache externe (Redis, Memcached).
     """
     logging.info("Scan démarré pour %s", ip)
     proc = subprocess.run(

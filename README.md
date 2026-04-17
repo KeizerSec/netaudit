@@ -1,5 +1,6 @@
 # NetAudit
 
+[![CI](https://github.com/KeizerSec/netaudit/actions/workflows/ci.yml/badge.svg)](https://github.com/KeizerSec/netaudit/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 ![Flask](https://img.shields.io/badge/Flask-REST_API-000000?style=for-the-badge&logo=flask&logoColor=white)
@@ -294,7 +295,7 @@ curl http://localhost:5000/history/192.168.1.1
 
 ```bash
 curl http://localhost:5000/version
-# → {"name": "NetAudit", "version": "2.4.0", "commit": "0403e03"}
+# → {"name": "NetAudit", "version": "2.5.0", "commit": "0403e03"}
 ```
 
 ---
@@ -363,6 +364,7 @@ cp .env.example .env
 - Score de priorité combiné : CVSS + 3.0 (KEV) + 1.5 (ransomware) + 2.0 × EPSS (≥ 0.5) ou 1.0 × EPSS
 - Niveaux : IMMEDIATE ≥ 13 / HIGH ≥ 10 / MEDIUM ≥ 6 / LOW ≥ 3 / INFO
 - Cache disque agrégé, TTL 24 h — second scan de la journée sans appel réseau
+- **GET conditionnel `If-Modified-Since`** sur le catalogue CISA KEV (~1 Mo) — au refresh, un `304 Not Modified` évite le retéléchargement et rafraîchit juste le TTL local
 - Offline-safe — échec réseau sans cache = scan continue sans enrichissement, cache périmé réutilisé en mode dégradé
 - Bloc « Top priorités d'action » affiché en tête du rapport HTML
 
@@ -434,7 +436,9 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-**283 tests** — validation IP, parsing Nmap XML, endpoints API (scan, rapport, history, version, health), corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue CVEs connues, déduplication, calcul de risque, chemin d'attaque, intégrité du catalogue), persistance SQLite (insertion, lecture, filtrage par IP), génération PDF (smoke test binaire, robustesse aux données partielles), priorisation EPSS + KEV (formule de score, seuils de niveau, cache TTL, batch API, fallback offline, dégradation sur cache périmé), détection contextuelle (classification 12 rôles, 12 règles anti-pattern avec frontières regex pour éviter les faux positifs, scénarios d'intégration), baseline historique (diff ports / versions / CVEs / findings / posture / rôle, niveau d'alerte par catégorie, escalade KEV, scénarios complets de compromission et de remédiation).
+**285 tests** — validation IP, parsing Nmap XML, endpoints API (scan, rapport, history, version, health), corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue CVEs connues, déduplication, calcul de risque, chemin d'attaque, intégrité du catalogue), persistance SQLite (insertion, lecture, filtrage par IP), génération PDF (smoke test binaire, robustesse aux données partielles), priorisation EPSS + KEV (formule de score, seuils de niveau, cache TTL, batch API, fallback offline, dégradation sur cache périmé, **conditional GET `If-Modified-Since` + réponse `304 Not Modified`**), détection contextuelle (classification 12 rôles, 12 règles anti-pattern avec frontières regex pour éviter les faux positifs, scénarios d'intégration), baseline historique (diff ports / versions / CVEs / findings / posture / rôle, niveau d'alerte par catégorie, escalade KEV, scénarios complets de compromission et de remédiation).
+
+La CI GitHub Actions exécute `pytest` sur **Python 3.11 + 3.12** et valide le `docker build` à chaque push sur `main` et chaque pull request.
 
 ---
 
@@ -480,6 +484,7 @@ netaudit/
 > NetAudit est un outil d'audit rapide et d'apprentissage.
 > La corrélation ATT&CK est heuristique (basée sur le score CVSS et le service) — elle donne des pistes, pas des certitudes.
 > La priorisation EPSS + KEV nécessite un accès réseau aux endpoints publics CISA et FIRST ; en mode offline strict (`PRIORITIZER_ENABLED=0`), seul le CVSS est utilisé.
+> Le cache Nmap (`lru_cache` sur `_scan_cached`) est **in-process, non partagé entre workers Gunicorn** : deux scans consécutifs de la même IP peuvent relancer un vrai Nmap s'ils tombent sur des workers différents. Acceptable pour un déploiement single-host ; pour un scale horizontal ou un partage strict, migrer vers Redis / Memcached.
 > Il ne remplace pas des solutions professionnelles comme Nessus, OpenVAS, ou une analyse manuelle des CVEs.
 
 ---

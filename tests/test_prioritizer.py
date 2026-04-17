@@ -100,8 +100,7 @@ class TestFetchKev:
 
     def test_cache_perime_rafraichit(self, prio, monkeypatch):
         # Cache périmé en reculant la mtime du fichier.
-        path = prio._write_cache(prio.KEV_CACHE_FILE, {"CVE-OLD": {}}) or \
-               os.path.join(prio.CACHE_DIR, prio.KEV_CACHE_FILE)
+        prio._write_cache(prio.KEV_CACHE_FILE, {"CVE-OLD": {}})
         old = time.time() - prio.CACHE_TTL_SECONDS - 100
         os.utime(os.path.join(prio.CACHE_DIR, prio.KEV_CACHE_FILE), (old, old))
 
@@ -113,14 +112,20 @@ class TestFetchKev:
                  "dueDate": "2025-02-01", "shortDescription": "bar", "dateAdded": "2024-10-02"},
             ]
         }
-        monkeypatch.setattr(prio, "_http_get_json", lambda url, timeout=10: fake_feed)
+        monkeypatch.setattr(
+            prio, "_http_get_json_conditional",
+            lambda url, last_modified=None, timeout=10: (fake_feed, "Wed, 16 Apr 2026 10:00:00 GMT", 200),
+        )
         out = prio.fetch_kev()
         assert set(out.keys()) == {"CVE-2024-1111", "CVE-2024-2222"}
         assert out["CVE-2024-1111"]["ransomware"] is True
         assert out["CVE-2024-2222"]["ransomware"] is False
 
     def test_reseau_ko_sans_cache_retourne_vide(self, prio, monkeypatch):
-        monkeypatch.setattr(prio, "_http_get_json", lambda url, timeout=10: None)
+        monkeypatch.setattr(
+            prio, "_http_get_json_conditional",
+            lambda url, last_modified=None, timeout=10: (None, None, 0),
+        )
         assert prio.fetch_kev() == {}
 
     def test_reseau_ko_avec_cache_perime_degrade(self, prio, monkeypatch):
@@ -130,8 +135,51 @@ class TestFetchKev:
         old = time.time() - prio.CACHE_TTL_SECONDS - 100
         os.utime(os.path.join(prio.CACHE_DIR, prio.KEV_CACHE_FILE), (old, old))
 
-        monkeypatch.setattr(prio, "_http_get_json", lambda url, timeout=10: None)
+        monkeypatch.setattr(
+            prio, "_http_get_json_conditional",
+            lambda url, last_modified=None, timeout=10: (None, None, 0),
+        )
         assert prio.fetch_kev() == stale
+
+    def test_if_modified_since_envoye_au_refresh(self, prio, monkeypatch):
+        """Au 2ᵉ refresh, le header `If-Modified-Since` doit être transmis."""
+        prio._write_cache(prio.KEV_CACHE_FILE, {"CVE-X": {"ransomware": False,
+                                                          "due_date": "", "short_desc": "",
+                                                          "date_added": ""}})
+        prio._write_cache(prio.KEV_META_FILE, {"last_modified": "Tue, 15 Apr 2026 09:00:00 GMT"})
+        old = time.time() - prio.CACHE_TTL_SECONDS - 100
+        os.utime(os.path.join(prio.CACHE_DIR, prio.KEV_CACHE_FILE), (old, old))
+
+        captured = {}
+        def fake_conditional(url, last_modified=None, timeout=10):
+            captured["last_modified"] = last_modified
+            return {"vulnerabilities": []}, "Wed, 16 Apr 2026 10:00:00 GMT", 200
+        monkeypatch.setattr(prio, "_http_get_json_conditional", fake_conditional)
+
+        prio.fetch_kev()
+        assert captured["last_modified"] == "Tue, 15 Apr 2026 09:00:00 GMT"
+
+    def test_304_not_modified_garde_cache_et_refresh_mtime(self, prio, monkeypatch):
+        """Réponse 304 → cache inchangé, mtime remonté pour reporter le TTL."""
+        stale = {"CVE-KEPT": {"ransomware": False, "due_date": "", "short_desc": "",
+                              "date_added": ""}}
+        prio._write_cache(prio.KEV_CACHE_FILE, stale)
+        prio._write_cache(prio.KEV_META_FILE, {"last_modified": "Tue, 15 Apr 2026 09:00:00 GMT"})
+
+        cache_path = os.path.join(prio.CACHE_DIR, prio.KEV_CACHE_FILE)
+        old = time.time() - prio.CACHE_TTL_SECONDS - 100
+        os.utime(cache_path, (old, old))
+
+        monkeypatch.setattr(
+            prio, "_http_get_json_conditional",
+            lambda url, last_modified=None, timeout=10: (None, last_modified, 304),
+        )
+
+        out = prio.fetch_kev()
+        assert out == stale
+        # mtime doit être remontée (le fichier n'est plus « périmé »)
+        new_mtime = os.path.getmtime(cache_path)
+        assert time.time() - new_mtime < 5
 
 
 class TestFetchEpss:

@@ -47,6 +47,7 @@ KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulner
 EPSS_URL = "https://api.first.org/data/v1/epss"
 
 KEV_CACHE_FILE = "kev.json"
+KEV_META_FILE = "kev.meta.json"
 EPSS_CACHE_FILE = "epss.json"
 CACHE_TTL_SECONDS = 24 * 3600
 HTTP_TIMEOUT = 10
@@ -87,15 +88,55 @@ def _write_cache(name: str, payload: dict) -> None:
         logging.warning("Écriture cache %s échouée : %s", name, exc)
 
 
+def _touch_cache(name: str) -> None:
+    """Rafraîchit le mtime d'un fichier cache sans toucher son contenu.
+    Utilisé après un 304 Not Modified pour reporter le TTL."""
+    path = _cache_path(name)
+    try:
+        os.utime(path, None)
+    except OSError as exc:
+        logging.warning("Touch cache %s échoué : %s", name, exc)
+
+
 def _http_get_json(url: str, timeout: int = HTTP_TIMEOUT) -> dict | None:
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "NetAudit/2.2"})
+        req = urllib.request.Request(url, headers={"User-Agent": "NetAudit/2.5"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError,
             json.JSONDecodeError, OSError) as exc:
         logging.warning("GET %s échoué : %s", url, exc)
         return None
+
+
+def _http_get_json_conditional(
+    url: str,
+    last_modified: str | None = None,
+    timeout: int = HTTP_TIMEOUT,
+) -> tuple[dict | None, str | None, int]:
+    """GET conditionnel — envoie `If-Modified-Since` si `last_modified` est fourni.
+
+    Retourne `(data, last_modified, status)`.
+    - 200 OK → `(parsed_json, new_last_modified, 200)`
+    - 304 Not Modified → `(None, last_modified, 304)` (appelant garde son cache)
+    - Échec / erreur → `(None, None, 0)`
+    """
+    headers = {"User-Agent": "NetAudit/2.5"}
+    if last_modified:
+        headers["If-Modified-Since"] = last_modified
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            new_last_modified = resp.headers.get("Last-Modified") or last_modified
+            return json.loads(resp.read().decode("utf-8")), new_last_modified, 200
+    except urllib.error.HTTPError as exc:
+        if exc.code == 304:
+            return None, last_modified, 304
+        logging.warning("GET %s échoué (HTTP %s) : %s", url, exc.code, exc)
+        return None, None, 0
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+        logging.warning("GET %s échoué : %s", url, exc)
+        return None, None, 0
 
 
 # ── KEV : catalogue CISA ─────────────────────────────────────────────────────
@@ -105,9 +146,15 @@ def fetch_kev(force_refresh: bool = False) -> dict[str, dict]:
 
     Stratégie :
     1. Cache frais → utilisé directement.
-    2. Cache périmé + réseau OK → refresh, remplace le cache.
+    2. Cache périmé + réseau OK → GET conditionnel (`If-Modified-Since`) :
+       - 200 → nouveau contenu, remplace cache + méta.
+       - 304 → cache inchangé, on refresh juste son `mtime`.
     3. Cache périmé + réseau KO → dégrade sur le cache périmé (mieux que rien).
     4. Pas de cache + réseau KO → dict vide (scan continue sans enrichissement).
+
+    Le catalogue CISA KEV fait ~1 Mo et ne change pas tous les jours. Le
+    `If-Modified-Since` économise la bande passante et la latence quand le
+    cache est périmé mais toujours valide côté serveur.
     """
     if not PRIORITIZER_ENABLED:
         return {}
@@ -116,7 +163,17 @@ def fetch_kev(force_refresh: bool = False) -> dict[str, dict]:
     if cached is not None and fresh and not force_refresh:
         return cached
 
-    raw = _http_get_json(KEV_URL)
+    meta, _ = _read_cache(KEV_META_FILE)
+    last_modified = (meta or {}).get("last_modified") if meta else None
+
+    raw, new_last_modified, status = _http_get_json_conditional(KEV_URL, last_modified)
+
+    if status == 304 and cached is not None:
+        # Serveur confirme : cache toujours valide. On refresh le mtime pour
+        # éviter de retaper l'API avant 24 h.
+        _touch_cache(KEV_CACHE_FILE)
+        return cached
+
     if raw is None:
         return cached or {}
 
@@ -132,6 +189,8 @@ def fetch_kev(force_refresh: bool = False) -> dict[str, dict]:
             "date_added":  entry.get("dateAdded", ""),
         }
     _write_cache(KEV_CACHE_FILE, index)
+    if new_last_modified:
+        _write_cache(KEV_META_FILE, {"last_modified": new_last_modified})
     return index
 
 
