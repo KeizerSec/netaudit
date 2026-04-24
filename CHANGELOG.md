@@ -5,6 +5,23 @@ Toutes les évolutions notables du projet sont listées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versions alignées sur [SemVer](https://semver.org/).
 
+## [2.6.1] — 2026-04-25
+
+### Modifié
+
+- `history.init_db()` n'est plus appelé à l'import du module. Les appelants
+  doivent l'invoquer explicitement au démarrage (`webapp.py` le fait au
+  boot, `scan.lancer_scan` le fait avant toute opération, le CLI `scan.py`
+  l'appelle via `setup_logging` + implicite). Objectif : supprimer le
+  side-effect surprenant à l'import, plus sain pour les tests et les
+  analyseurs statiques.
+- `scan.py` expose maintenant `setup_logging(force=False)` — la
+  configuration du root logger (fichier rotaté + stdout) n'est plus faite
+  à l'import. Importer `scan` pour un outil, un test ou un script
+  utilitaire ne reconfigure plus le logger du process appelant.
+- Tests de régression explicites pour les deux points (`test_history.py:
+  test_import_seul_ne_cree_pas_la_db`, `test_scan.py: TestSetupLogging`).
+
 ## [2.6.0] — 2026-04-25
 
 ### Ajouté

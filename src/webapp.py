@@ -8,10 +8,19 @@ from flask import Flask, jsonify, send_file, request, Response
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-from scan import lancer_scan, valider_ip, REPORT_DIR
+from scan import lancer_scan, valider_ip, REPORT_DIR, setup_logging
 from version import version_info
-from history import list_scans, scans_for_ip
+from history import list_scans, scans_for_ip, init_db
 from exports import render_pdf
+
+# Initialisations explicites au démarrage de l'application :
+# - setup_logging configure le root logger (fichier rotaté + stdout) ;
+# - init_db crée le schéma SQLite si absent.
+# scan.py et history.py ne font plus ces appels à l'import pour éviter
+# les side-effects dans les tests, les imports croisés et les analyseurs
+# statiques.
+setup_logging()
+init_db()
 
 # Charger le fichier .env s'il existe (sans écraser les variables déjà définies)
 load_dotenv()

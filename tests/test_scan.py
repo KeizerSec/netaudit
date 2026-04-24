@@ -249,3 +249,42 @@ class TestParserNmapXml:
             for key in ("ip", "scan_date", "host_up", "hostname", "os_guess",
                         "ports", "total_vulns", "raw"):
                 assert key in result
+
+
+class TestSetupLogging:
+    """setup_logging ne doit plus être un side-effect d'import (2.6.1)."""
+
+    def test_import_seul_ne_cree_pas_de_fichier_log(self, tmp_path, monkeypatch):
+        """Régression — importer scan ne doit plus créer le fichier de log."""
+        import importlib
+        log_file = tmp_path / "never_created.log"
+        monkeypatch.setenv("LOG_FILE_PATH", str(log_file))
+        import scan
+        importlib.reload(scan)
+        assert not log_file.exists()
+
+    def test_setup_logging_cree_le_fichier(self, tmp_path, monkeypatch):
+        import importlib
+        import logging
+        log_file = tmp_path / "scan.log"
+        monkeypatch.setenv("LOG_FILE_PATH", str(log_file))
+        import scan
+        importlib.reload(scan)
+        scan.setup_logging(force=True)
+        logging.info("ping via setup_logging")
+        # Handler ferme à la rotation/flush — le fichier est bien ouvert à ce stade.
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+        assert log_file.exists()
+
+    def test_idempotent(self, tmp_path, monkeypatch):
+        """Appeler setup_logging deux fois ne duplique pas les handlers."""
+        import importlib
+        import logging
+        monkeypatch.setenv("LOG_FILE_PATH", str(tmp_path / "scan.log"))
+        import scan
+        importlib.reload(scan)
+        scan.setup_logging(force=True)
+        count_after_first = len(logging.getLogger().handlers)
+        scan.setup_logging()  # sans force : no-op
+        assert len(logging.getLogger().handlers) == count_after_first

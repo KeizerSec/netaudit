@@ -57,7 +57,13 @@ def _connect() -> Iterator[sqlite3.Connection]:
 
 
 def init_db() -> None:
-    """Crée le schéma si absent. Idempotent, safe à appeler à chaque démarrage."""
+    """Crée le schéma si absent. Idempotent, safe à appeler à chaque démarrage.
+
+    **À appeler explicitement** au démarrage de l'application (webapp, CLI) —
+    le module ne fait plus ce travail à l'import pour éviter les side-effects
+    surprenants dans les tests, les imports croisés et les outils d'analyse
+    qui parcourent le code sans intention d'ouvrir la base.
+    """
     with _connect() as conn:
         conn.executescript(_SCHEMA)
 
@@ -148,7 +154,3 @@ def scans_for_ip(ip: str, limit: int = 50) -> list[dict]:
             summary["data"] = None
         out.append(summary)
     return out
-
-
-# Initialisation au chargement du module — le schéma est idempotent.
-init_db()

@@ -13,11 +13,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 @pytest.fixture
 def history_module(tmp_path, monkeypatch):
-    """Recharge history.py avec HISTORY_DB_PATH pointant sur une base jetable."""
+    """Recharge history.py avec HISTORY_DB_PATH pointant sur une base jetable.
+
+    Depuis la 2.6.1, `init_db()` n'est plus appelé à l'import — on l'appelle
+    explicitement ici pour reproduire l'état d'une application démarrée
+    (webapp.py fait cet appel au boot, scan.lancer_scan aussi avant toute
+    opération). Les tests existants peuvent ainsi continuer à supposer que
+    le schéma existe après l'obtention de la fixture.
+    """
     db_file = tmp_path / "test_netaudit.db"
     monkeypatch.setenv("HISTORY_DB_PATH", str(db_file))
     import history
     importlib.reload(history)
+    history.init_db()
     return history
 
 
@@ -34,8 +42,21 @@ def _sample_scan(ip: str = "192.168.1.10", vulns: int = 2, risk: str = "HIGH") -
 
 class TestInitDb:
     def test_schema_cree_fichier(self, history_module, tmp_path):
-        # Le fichier est créé à l'initialisation du module (init_db au chargement).
+        # Le fichier est créé par init_db(), appelé par la fixture.
         assert os.path.exists(history_module.DB_PATH)
+
+    def test_import_seul_ne_cree_pas_la_db(self, tmp_path, monkeypatch):
+        """Regression test — importer history ne doit plus toucher le filesystem.
+
+        Avant 2.6.1, `init_db()` s'exécutait à l'import et créait la DB. On
+        vérifie ici que ce comportement a bien disparu : seul un appel
+        explicite à init_db (ou à une fonction qui l'implique) doit écrire.
+        """
+        db_file = tmp_path / "never_created.db"
+        monkeypatch.setenv("HISTORY_DB_PATH", str(db_file))
+        import history
+        importlib.reload(history)
+        assert not os.path.exists(db_file)
 
     def test_idempotent(self, history_module):
         # Rejouer init_db ne doit pas lever.

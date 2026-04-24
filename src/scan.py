@@ -19,18 +19,38 @@ REPORT_DIR    = os.getenv("REPORT_DIR",    os.path.join(BASE_DIR, "..", "rapport
 NMAP_TIMEOUT  = int(os.getenv("NMAP_TIMEOUT", "300"))
 CACHE_SIZE    = int(os.getenv("CACHE_SIZE",   "32"))
 
-# Logging double sortie : fichier rotaté (audit long terme) + stdout (docker logs,
-# systemd journal, agrégateurs type Loki/CloudWatch). Les deux handlers partagent
-# le même format pour faciliter le grep croisé.
-os.makedirs(os.path.dirname(os.path.abspath(LOG_FILE_PATH)), exist_ok=True)
 _LOG_FORMAT = "%(asctime)s %(levelname)s %(message)s"
-_file_handler = RotatingFileHandler(LOG_FILE_PATH, maxBytes=5 * 1024 * 1024, backupCount=5)
-_stream_handler = logging.StreamHandler()
-logging.basicConfig(
-    handlers=[_file_handler, _stream_handler],
-    level=logging.INFO,
-    format=_LOG_FORMAT,
-)
+_logging_configured = False
+
+
+def setup_logging(force: bool = False) -> None:
+    """Configure les handlers fichier rotaté + stdout sur le root logger.
+
+    Idempotent — appelé plusieurs fois sans duplication de handlers.
+    À appeler **explicitement** au démarrage de l'application (webapp, CLI).
+
+    Fichier rotaté (audit long terme) + stdout (docker logs, systemd journal,
+    agrégateurs type Loki / CloudWatch). Les deux handlers partagent le même
+    format pour faciliter le grep croisé.
+
+    Depuis la 2.6.1, cette configuration n'est plus appliquée à l'import du
+    module. Objectif : importer `scan` pour un outil d'analyse, un test,
+    ou un script utilitaire ne doit pas reconfigurer le root logger du
+    process appelant.
+    """
+    global _logging_configured
+    if _logging_configured and not force:
+        return
+    os.makedirs(os.path.dirname(os.path.abspath(LOG_FILE_PATH)), exist_ok=True)
+    file_handler = RotatingFileHandler(LOG_FILE_PATH, maxBytes=5 * 1024 * 1024, backupCount=5)
+    stream_handler = logging.StreamHandler()
+    logging.basicConfig(
+        handlers=[file_handler, stream_handler],
+        level=logging.INFO,
+        format=_LOG_FORMAT,
+        force=force,
+    )
+    _logging_configured = True
 
 
 def verifier_nmap() -> None:
@@ -294,8 +314,9 @@ def lancer_scan(ip: str) -> tuple:
     # courant, sinon `scans_for_ip` remonterait le scan qu'on vient de faire.
     # Chaque scan historique contient ainsi sa propre comparaison au précédent,
     # accessible directement depuis /history/<ip> sans recalcul.
-    from history import scans_for_ip, record_scan
+    from history import scans_for_ip, record_scan, init_db
     from baseline import enrich_baseline
+    init_db()  # idempotent — garantit que le schéma existe avant lecture/écriture
     previous_scans = scans_for_ip(ip, limit=1)
     data = enrich_baseline(data, previous_scans[0] if previous_scans else None)
 
@@ -311,6 +332,8 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage : python3 scan.py <IP>")
         sys.exit(1)
+
+    setup_logging()  # CLI : on configure les handlers explicitement
 
     ip_arg = sys.argv[1]
     data, chemin = lancer_scan(ip_arg)
