@@ -100,7 +100,7 @@ def _touch_cache(name: str) -> None:
 
 def _http_get_json(url: str, timeout: int = HTTP_TIMEOUT) -> dict | None:
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "NetAudit/2.5"})
+        req = urllib.request.Request(url, headers={"User-Agent": "NetAudit/2.6"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError,
@@ -121,7 +121,7 @@ def _http_get_json_conditional(
     - 304 Not Modified → `(None, last_modified, 304)` (appelant garde son cache)
     - Échec / erreur → `(None, None, 0)`
     """
-    headers = {"User-Agent": "NetAudit/2.5"}
+    headers = {"User-Agent": "NetAudit/2.6"}
     if last_modified:
         headers["If-Modified-Since"] = last_modified
     try:
@@ -286,6 +286,65 @@ def priority_level(score: float) -> str:
     return "INFO"
 
 
+def priority_reasons(
+    cvss: float,
+    epss: float | None,
+    in_kev: bool,
+    ransomware: bool,
+) -> list[dict]:
+    """Explicabilité du score : raisons lisibles qui ont contribué au niveau.
+
+    Chaque entrée = {"code": ..., "label": ...}. Le `code` permet à l'UI de
+    colorer/filtrer ; le `label` est affiché tel quel. Ordre : signaux les
+    plus discriminants en premier (KEV > ransomware > EPSS fort > CVSS).
+    Sert à désamorcer la critique « score opaque » — le lecteur voit
+    directement *pourquoi* le niveau a été émis.
+    """
+    reasons: list[dict] = []
+
+    if in_kev:
+        reasons.append({
+            "code":  "kev",
+            "label": "Présente dans CISA KEV — exploitation active confirmée",
+        })
+    if ransomware:
+        reasons.append({
+            "code":  "ransomware",
+            "label": "Utilisée par des campagnes ransomware documentées",
+        })
+
+    if epss is not None:
+        try:
+            e = max(0.0, min(float(epss), 1.0))
+        except (TypeError, ValueError):
+            e = 0.0
+        if e >= 0.5:
+            reasons.append({
+                "code":  "epss_high",
+                "label": f"EPSS {e:.2f} — probabilité forte d'exploitation à 30 jours",
+            })
+        elif e >= 0.1:
+            reasons.append({
+                "code":  "epss_medium",
+                "label": f"EPSS {e:.2f} — exploitation possible à court terme",
+            })
+
+    try:
+        c = float(cvss or 0)
+    except (TypeError, ValueError):
+        c = 0.0
+    if c >= 9.0:
+        reasons.append({"code": "cvss_critical", "label": f"CVSS {c:.1f} (critique)"})
+    elif c >= 7.0:
+        reasons.append({"code": "cvss_high",     "label": f"CVSS {c:.1f} (élevée)"})
+    elif c >= 4.0:
+        reasons.append({"code": "cvss_medium",   "label": f"CVSS {c:.1f} (moyenne)"})
+    elif c > 0:
+        reasons.append({"code": "cvss_low",      "label": f"CVSS {c:.1f} (faible)"})
+
+    return reasons
+
+
 # ── Enrichissement du scan ───────────────────────────────────────────────────
 
 def _collect_cve_ids(data: dict) -> list[str]:
@@ -344,11 +403,18 @@ def enrich_vulns(data: dict) -> dict:
                 ransomware=ransomware,
             )
             level = priority_level(score)
+            reasons = priority_reasons(
+                cvss=v.get("score", 0),
+                epss=epss_score,
+                in_kev=in_kev,
+                ransomware=ransomware,
+            )
 
             v["epss"] = epss_entry
             v["kev"] = kev_entry
             v["priority_score"] = score
             v["priority_level"] = level
+            v["priority_reasons"] = reasons
 
             counts[level] += 1
             if _level_rank(level) > _level_rank(max_level):
@@ -361,6 +427,7 @@ def enrich_vulns(data: dict) -> dict:
                 "id": cve, "port": port.get("port"),
                 "priority_score": score, "priority_level": level,
                 "in_kev": in_kev, "ransomware": ransomware,
+                "reasons": reasons,
             })
 
     top_vulns.sort(key=lambda x: x["priority_score"], reverse=True)

@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import subprocess
 
-__version__ = "2.5.0"
+__version__ = "2.6.0"
 __name__ = "NetAudit"
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))

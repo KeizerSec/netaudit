@@ -180,11 +180,31 @@ def _diff_vulns(current: dict, previous: dict) -> tuple[list, list, list]:
 
 # ── Diff findings / posture / role ───────────────────────────────────────────
 
+def _finding_key(f: dict) -> tuple:
+    """Clé stable pour un finding. `rule_id` est figé dans le nom de fonction
+    de la règle (profiler.py), donc insensible aux reformulations de titre.
+    Fallback (title, severity) pour les scans antérieurs à 2.6 qui n'ont pas
+    encore `rule_id`.
+    """
+    rule_id = f.get("rule_id")
+    if rule_id:
+        return ("rule", rule_id)
+    return ("text", f.get("title"), f.get("severity"))
+
+
 def _diff_findings(current: dict, previous: dict) -> tuple[list, list]:
-    cur = {(f.get("title"), f.get("severity")): f for f in (current.get("context") or {}).get("findings") or []}
-    prev = {(f.get("title"), f.get("severity")): f for f in (previous.get("context") or {}).get("findings") or []}
-    new = [{"title": k[0], "severity": k[1]} for k in cur if k not in prev]
-    resolved = [{"title": k[0], "severity": k[1]} for k in prev if k not in cur]
+    cur_findings = (current.get("context") or {}).get("findings") or []
+    prev_findings = (previous.get("context") or {}).get("findings") or []
+    cur = {_finding_key(f): f for f in cur_findings}
+    prev = {_finding_key(f): f for f in prev_findings}
+    new = [
+        {"title": f.get("title"), "severity": f.get("severity"), "rule_id": f.get("rule_id")}
+        for k, f in cur.items() if k not in prev
+    ]
+    resolved = [
+        {"title": f.get("title"), "severity": f.get("severity"), "rule_id": f.get("rule_id")}
+        for k, f in prev.items() if k not in cur
+    ]
     return new, resolved
 
 

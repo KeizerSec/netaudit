@@ -77,6 +77,67 @@ class TestPriorityLevel:
         assert prio.priority_level(score) == expected
 
 
+class TestPriorityReasons:
+    def test_cve_dans_kev_avec_ransomware_liste_les_deux(self, prio):
+        reasons = prio.priority_reasons(cvss=9.8, epss=0.92, in_kev=True, ransomware=True)
+        codes = [r["code"] for r in reasons]
+        assert codes == ["kev", "ransomware", "epss_high", "cvss_critical"]
+
+    def test_ordre_kev_avant_epss_avant_cvss(self, prio):
+        reasons = prio.priority_reasons(cvss=7.5, epss=0.6, in_kev=True, ransomware=False)
+        codes = [r["code"] for r in reasons]
+        # KEV d'abord (signal factuel le plus discriminant), EPSS haut ensuite, CVSS en dernier.
+        assert codes.index("kev") < codes.index("epss_high") < codes.index("cvss_high")
+
+    def test_epss_faible_sous_seuil_medium_silencieux(self, prio):
+        # EPSS 0.05 < 0.1 → ne doit pas apparaître dans les raisons.
+        reasons = prio.priority_reasons(cvss=4.0, epss=0.05, in_kev=False, ransomware=False)
+        assert all(not r["code"].startswith("epss") for r in reasons)
+
+    def test_epss_medium_entre_01_et_05(self, prio):
+        reasons = prio.priority_reasons(cvss=5.0, epss=0.3, in_kev=False, ransomware=False)
+        codes = [r["code"] for r in reasons]
+        assert "epss_medium" in codes
+        assert "epss_high" not in codes
+
+    def test_label_epss_contient_la_valeur(self, prio):
+        reasons = prio.priority_reasons(cvss=7.0, epss=0.82, in_kev=False, ransomware=False)
+        epss_reason = next(r for r in reasons if r["code"] == "epss_high")
+        assert "0.82" in epss_reason["label"]
+
+    def test_cvss_nul_pas_de_raison_cvss(self, prio):
+        reasons = prio.priority_reasons(cvss=0.0, epss=None, in_kev=True, ransomware=False)
+        assert all(not r["code"].startswith("cvss") for r in reasons)
+        # KEV reste mentionné même sans CVSS.
+        assert any(r["code"] == "kev" for r in reasons)
+
+    def test_cve_banale_sans_kev_ni_epss(self, prio):
+        reasons = prio.priority_reasons(cvss=5.5, epss=None, in_kev=False, ransomware=False)
+        codes = [r["code"] for r in reasons]
+        assert codes == ["cvss_medium"]
+
+    def test_enrich_vulns_propage_priority_reasons(self, prio, monkeypatch):
+        monkeypatch.setattr(prio, "fetch_kev", lambda: {
+            "CVE-2024-AAA": {"ransomware": True, "due_date": "", "short_desc": "",
+                             "date_added": ""},
+        })
+        monkeypatch.setattr(prio, "fetch_epss", lambda ids: {
+            "CVE-2024-AAA": {"score": 0.91, "percentile": 0.99},
+        })
+        data = {
+            "ip": "1.1.1.1",
+            "ports": [{"port": 443, "vulns": [{"id": "CVE-2024-AAA", "score": 9.8}]}],
+        }
+        out = prio.enrich_vulns(data)
+        vuln = out["ports"][0]["vulns"][0]
+        codes = [r["code"] for r in vuln["priority_reasons"]]
+        # Les 4 signaux doivent être présents.
+        assert set(codes) == {"kev", "ransomware", "epss_high", "cvss_critical"}
+        # Le top doit aussi embarquer les raisons pour affichage en tête de rapport.
+        top = out["priority_summary"]["top"][0]
+        assert top["reasons"] == vuln["priority_reasons"]
+
+
 class TestFetchKev:
     def test_disabled_retourne_dict_vide(self, prio, monkeypatch):
         monkeypatch.setenv("PRIORITIZER_ENABLED", "0")

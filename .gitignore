@@ -8,6 +8,9 @@ logs/
 # Rapports HTML générés
 rapports/
 
+# Rapport de démonstration rendu par scripts/render_demo.py (PNG committé, HTML ignoré)
+docs/img/demo_report.html
+
 # Base SQLite d'historique (générée au runtime)
 netaudit.db
 *.db-journal

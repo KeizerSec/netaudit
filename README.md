@@ -1,495 +1,154 @@
 # NetAudit
 
 [![CI](https://github.com/KeizerSec/netaudit/actions/workflows/ci.yml/badge.svg)](https://github.com/KeizerSec/netaudit/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-![Flask](https://img.shields.io/badge/Flask-REST_API-000000?style=for-the-badge&logo=flask&logoColor=white)
-![Nmap](https://img.shields.io/badge/Nmap-Vulners-4682B4?style=for-the-badge&logoColor=white)
-![MITRE ATT&CK](https://img.shields.io/badge/MITRE_ATT%26CK-Correlation-E8001D?style=for-the-badge&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-REST_API-000000?logo=flask&logoColor=white)
+![MITRE ATT&CK](https://img.shields.io/badge/MITRE_ATT%26CK-Correlation-E8001D)
+![License](https://img.shields.io/badge/License-MIT-22c55e)
 
-**Scanner de vulnérabilités réseau avec corrélation MITRE ATT&CK, priorisation EPSS + CISA KEV, détection contextuelle et baseline historique.** Donnez une IP, recevez un rapport structuré — ports ouverts, CVEs détectées, techniques d'attaque ATT&CK associées, chemin d'attaque ordonné selon le kill chain, **priorités d'action basées sur exploitation réelle** (présence dans le catalogue CISA KEV, score probabiliste FIRST EPSS, flag ransomware), **classification automatique du rôle de l'hôte + analyse de posture** (12 règles anti-pattern, score 0–100, grade A–F), **détection de dérive vs scan précédent** (nouveaux ports, CVEs apparues, escalades KEV, régressions de version, changement de posture), niveau de risque global, priorités de détection SIEM. Trois formats de sortie (HTML interactif, JSON, PDF A4) et une API REST protégée par clé.
+**Scanner réseau qui ne se contente pas de remonter des CVEs — il les hiérarchise par exploitation réelle.**
+Croise CVSS, CISA KEV, FIRST EPSS et campagnes ransomware pour dire *quoi patcher en premier* et *pourquoi*.
+
+![Rapport NetAudit](docs/img/demo_report_hero.png)
 
 > **Usage légal uniquement.** Ne scannez que des hôtes sur lesquels vous avez une autorisation explicite.
 
 ---
 
-## Sommaire
-
-- [Ce que fait NetAudit](#ce-que-fait-netaudit)
-- [Démarrage rapide](#démarrage-rapide)
-- [Utilisation](#utilisation)
-- [Endpoints API](#endpoints-api)
-- [Configuration](#configuration)
-- [Fonctionnalités](#fonctionnalités)
-- [Tests](#tests)
-- [Structure du projet](#structure-du-projet)
-- [Limitations](#limitations)
-
----
-
-## Ce que fait NetAudit
-
-```
-Vous donnez une IP  →  NetAudit lance Nmap + Vulners  →  Vous obtenez :
-
-  Couche 1 — Inventaire réseau
-  • Ports ouverts, protocoles, services et versions (Nmap -sV)
-  • Détection OS et reverse DNS quand disponibles
-  • CVEs associées avec score CVSS et lien vers Vulners
-
-  Couche 2 — Corrélation MITRE ATT&CK
-  • Chaque service → techniques d'attaque liées (confiance haute, 47 services)
-  • Chaque CVE → techniques d'exploitation via CVE→CWE→ATT&CK (3 niveaux)
-  • Chemin d'attaque hypothétique ordonné selon les 14 tactiques du kill chain
-  • Niveau de risque global : CRITICAL / HIGH / MEDIUM / LOW
-  • Jusqu'à 5 priorités de détection SIEM extraites automatiquement
-  • Mitigations concrètes proposées par technique
-
-  Couche 3 — Priorisation réelle (EPSS + CISA KEV)
-  • Croisement avec CISA KEV — preuve d'exploitation active dans la nature
-  • Score FIRST EPSS — probabilité d'exploitation à 30 jours (0–1)
-  • Flag ransomware — CVEs utilisées dans des campagnes documentées
-  • Score combiné : CVSS + 3.0 (KEV) + 1.5 (ransomware) + EPSS pondéré
-  • Niveau : IMMEDIATE / HIGH / MEDIUM / LOW / INFO
-  • Top 5 priorités d'action affiché en tête du rapport
-  • Cache disque 24 h — offline-safe, dégrade sur cache périmé si réseau KO
-
-  Couche 4 — Détection contextuelle (rôle + posture)
-  • Classification automatique du rôle — web, DB, mail, DNS, IoT, admin,
-    hypervisor, directory, file, monitoring, VoIP, workstation
-  • Catalogue de 12 règles anti-pattern — DB exposée, Telnet clair,
-    FTP sans TLS, SNMP public, multi-admin, web sans HTTPS, OS EOL,
-    versions non-supportées, DB+web colocalisés, IoT management, etc.
-  • Chaque finding = severity + description + recommandation + evidence
-  • Score de posture 0–100 → grade A/B/C/D/F, comparable dans le temps
-  • 100 % local — aucune dépendance réseau, déterministe
-
-  Couche 5 — Baseline historique & détection de dérive
-  • Diff automatique vs scan précédent de la même IP (SQLite local)
-  • Alertes typées : port apparu, CVE ajoutée, escalade KEV, version changée,
-    finding nouveau, chute de posture, changement de rôle, remédiations
-  • Niveau d'alerte : critical / warning / neutral / positive
-  • Port DB ou admin ouvert → critical · CVE basculée dans KEV → critical ·
-    chute posture ≥ 20 pts → critical · régression de version → warning ·
-    port fermé / CVE patchée / finding résolu / posture en hausse → positive
-  • Bannière de dérive en tête du rapport, section détaillée avec evidence
-  • Premier scan → message explicite, activation automatique dès le 2ᵉ passage
-  • Baseline embarqué dans chaque scan historique (pas de recalcul)
-
-  Couche 6 — Rapport & exports
-  • Rapport HTML dark-mode : donut CVSS, kill chain cliquable, filtre ports,
-    meta-cards Rôle + Posture (grade + jauge), bloc Top priorités d'action,
-    section Posture & recommandations avec findings colorisés par sévérité
-  • Export JSON brut pour intégration outils tiers (expose priority_summary
-    et context en plus de l'attack_summary)
-  • Export PDF A4 généré via reportlab — archivage, audit, rapport formel
-    (en-tête + table posture + synthèse ATT&CK + table ports)
-  • Bouton « Copier en Markdown » pour ticket / PR / rapport d'incident
-    (inclut priorités + findings posture + reco)
-
-  Couche 7 — Historique & observabilité
-  • Persistance SQLite — chaque scan survit au redémarrage
-  • Endpoints /history et /history/<ip> pour suivi de tendances
-  • /version — traçabilité de l'image déployée (semver + hash commit)
-  • /health — probe HTTP compatible Docker HEALTHCHECK natif
-```
-
----
-
-## Démarrage rapide
-
-### Option 1 — Docker (recommandé, aucun prérequis technique)
+## Démo en 60 secondes
 
 ```bash
-# 1. Télécharger le projet
-git clone https://github.com/KeizerSec/netaudit
-cd netaudit
-
-# 2. Construire l'image
+git clone https://github.com/KeizerSec/netaudit && cd netaudit
 docker build -t netaudit .
-
-# 3. Lancer (mode développement — sans clé API)
 docker run -p 5000:5000 netaudit
 
-# 4. Lancer en production (avec clé API)
-docker run -p 5000:5000 -e API_KEY=votre_cle_secrete netaudit
+# Dans un autre terminal
+curl http://localhost:5000/scan/192.168.1.1
+open  http://localhost:5000/rapport/192.168.1.1
 ```
 
-### Option 2 — Local (Python 3.11+ et Nmap requis)
-
-```bash
-# 1. Installer Nmap sur votre système
-#    macOS  : brew install nmap
-#    Ubuntu : sudo apt install nmap
-#    Windows: https://nmap.org/download.html
-
-# 2. Installer les dépendances Python
-pip install -r requirements.txt
-
-# 3. Lancer le serveur depuis src/
-cd src
-gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 360 webapp:app
-```
+Trois formats en sortie : **HTML** interactif, **JSON** pour les pipelines, **PDF A4** pour l'audit.
 
 ---
 
-## Utilisation
+## Ce qui distingue NetAudit
 
-### Lancer un scan
+| Couche | Ce que NetAudit fait | Source |
+|---|---|---|
+| **Priorisation exploitée** | Score combiné CVSS + KEV + ransomware + EPSS, niveau IMMEDIATE/HIGH/… et **raisons explicables par CVE** | CISA KEV · FIRST EPSS |
+| **Corrélation ATT&CK** | CVE → CWE → techniques, chemin d'attaque par kill chain, mitigations | Catalogue local (79 techniques, 47 services) |
+| **Détection contextuelle** | Classification automatique du rôle + 12 règles anti-pattern, score de posture 0–100 | 100 % local, déterministe |
+| **Baseline historique** | Diff vs scan précédent, alertes critical/warning/positive, escalade KEV | SQLite local |
+| **Exports** | HTML dark-mode, JSON brut, PDF A4 (reportlab), Markdown presse-papier | — |
 
-```bash
-# Sans authentification (mode dev)
-curl http://localhost:5000/scan/192.168.1.1
-
-# Avec clé API (production)
-curl http://localhost:5000/scan/192.168.1.1 \
-     -H "X-API-Key: votre_cle_secrete"
-```
-
-### Exemple de réponse (extrait)
-
-```json
-{
-  "status": "ok",
-  "ip": "192.168.1.1",
-  "host_up": true,
-  "hostname": "router.local",
-  "os_guess": "Linux 5.4",
-  "scan_date": "2026-04-16 12:34:56 UTC",
-  "total_vulns": 3,
-  "ports": [
-    {
-      "port": 22,
-      "protocol": "tcp",
-      "state": "open",
-      "service": "ssh",
-      "version": "OpenSSH 7.6p1 Ubuntu",
-      "vulns": [
-        {
-          "id": "CVE-2021-28041",
-          "score": 7.8,
-          "url": "https://vulners.com/cve/CVE-2021-28041",
-          "attack_techniques": [
-            { "id": "T1078", "name": "Valid Accounts", "confidence": "medium" },
-            { "id": "T1068", "name": "Exploitation for Privilege Escalation", "confidence": "medium" }
-          ],
-          "kev": {
-            "ransomware": false,
-            "due_date": "2023-03-14",
-            "short_desc": "OpenSSH double-free vulnerability",
-            "date_added": "2023-02-21"
-          },
-          "epss": { "score": 0.042, "percentile": 0.91 },
-          "priority_score": 10.84,
-          "priority_level": "HIGH"
-        }
-      ],
-      "service_techniques": [
-        { "id": "T1021.004", "name": "SSH", "confidence": "high" }
-      ]
-    }
-  ],
-  "attack_summary": {
-    "risk_level": "HIGH",
-    "phases_count": 4,
-    "phases": [
-      {
-        "tactic": "Initial Access",
-        "tactic_id": "TA0001",
-        "techniques": [ { "id": "T1190", "confidence": "high" } ]
-      }
-    ],
-    "detection_priorities": [
-      "Surveiller les tentatives de connexion SSH répétées",
-      "Alerter sur les connexions depuis des plages IP inhabituelles"
-    ]
-  },
-  "priority_summary": {
-    "max_level": "HIGH",
-    "counts": { "IMMEDIATE": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 0, "INFO": 0 },
-    "kev_count": 1,
-    "ransomware_count": 0,
-    "top": [
-      { "id": "CVE-2021-28041", "port": 22, "priority_score": 10.84,
-        "priority_level": "HIGH", "in_kev": true, "ransomware": false }
-    ],
-    "sources_used": ["CISA KEV", "FIRST EPSS"]
-  },
-  "context": {
-    "role": "admin_host",
-    "role_confidence": "high",
-    "role_score": 1.8,
-    "posture_score": 72,
-    "posture_grade": "C",
-    "summary": { "critical": 0, "high": 1, "medium": 1, "low": 0, "info": 0 },
-    "findings": [
-      {
-        "severity": "HIGH",
-        "title": "Version(s) de service non-supportée(s)",
-        "description": "Au moins un service expose une version sans correctifs…",
-        "recommendation": "Mettre à jour vers une branche supportée du produit.",
-        "evidence": "OpenSSH 6.x (release > 8 ans)"
-      }
-    ]
-  },
-  "baseline": {
-    "has_previous": true,
-    "previous_date": "2026-04-15 10:00:00 UTC",
-    "previous_id": 41,
-    "summary": { "critical": 1, "warning": 1, "neutral": 0, "positive": 1, "total": 3, "has_drift": true },
-    "alerts": [
-      {
-        "level": "critical", "type": "kev_escalation",
-        "title": "Escalade KEV : CVE-2021-28041 désormais activement exploitée",
-        "description": "Cette CVE était déjà présente mais sans preuve d'exploitation…",
-        "evidence": "CVE CVE-2021-28041 · port 22"
-      },
-      {
-        "level": "warning", "type": "version_change",
-        "title": "Version modifiée sur 22/ssh",
-        "description": "La version du service a changé depuis le dernier scan…",
-        "evidence": "OpenSSH 8.9p1 → OpenSSH 7.6p1 Ubuntu"
-      },
-      {
-        "level": "positive", "type": "port_removed",
-        "title": "Port fermé : 23/telnet",
-        "description": "Réduction de surface — ce service n'est plus exposé.",
-        "evidence": "23/telnet"
-      }
-    ]
-  },
-  "rapport_html": "/rapport/192.168.1.1"
-}
-```
-
-### Consulter et exporter le rapport
-
-```bash
-# Rapport HTML interactif (navigateur)
-open http://localhost:5000/rapport/192.168.1.1
-
-# Data JSON complète du dernier scan (intégration outils tiers)
-curl http://localhost:5000/rapport/192.168.1.1?format=json
-
-# PDF A4 téléchargeable (audit, archivage)
-curl -OJ http://localhost:5000/rapport/192.168.1.1?format=pdf
-```
-
-Le rapport HTML affiche : meta-cards synthétiques (IP, date, ports, donut CVSS, rôle inféré, priorité max KEV/ransomware, grade de posture + jauge 0–100, **synthèse de dérive vs scan précédent**), bloc « Top priorités d'action » basé sur le score combiné CVSS + KEV + EPSS, **section « Dérive historique »** avec bannière colorée critical/warning/clean et cartes d'alertes typées (port apparu, CVE ajoutée, escalade KEV, version changée, finding nouveau, posture en chute, etc.), section « Posture & recommandations » avec findings colorisés par sévérité (titre + description + reco concrète + evidence), badges KEV / RANSOM / priorité et score EPSS par CVE dans le tableau des ports, kill chain MITRE ATT&CK cliquable (chaque phase active scroll vers sa fiche), fiches techniques colorisées par confiance avec détection et mitigations, priorités de détection SIEM, filtre de recherche sur les ports, boutons d'export (JSON / PDF / Markdown presse-papier), styles d'impression dédiés.
-
-### Consulter l'historique
-
-```bash
-# Liste synthétique des derniers scans (risk_level, total_vulns, date)
-curl http://localhost:5000/history
-
-# Avec une limite explicite (max 500)
-curl http://localhost:5000/history?limit=20
-
-# Historique détaillé d'une IP (toutes les data complètes)
-curl http://localhost:5000/history/192.168.1.1
-```
-
-### Tracer la build déployée
-
-```bash
-curl http://localhost:5000/version
-# → {"name": "NetAudit", "version": "2.5.0", "commit": "abc1234"}
-```
+Le tout **offline-safe** : un échec réseau dégrade sur cache ou CVSS seul, jamais d'exception à la surface.
 
 ---
 
 ## Endpoints API
 
-| Endpoint | Description | Auth |
-|---|---|---|
-| `GET /scan/<ip>` | Lance un scan sur l'IP cible | Oui (si `API_KEY` définie) |
-| `GET /rapport/<ip>` | Rapport HTML (défaut) — `?format=json` ou `?format=pdf` | Oui |
-| `GET /history` | Liste synthétique des derniers scans (paramètre `limit`, défaut 100) | Oui |
-| `GET /history/<ip>` | Historique détaillé d'une IP (data complète) | Oui |
-| `GET /version` | Nom, version sémantique, hash commit | Non |
-| `GET /health` | Statut du serveur | Non |
+| Méthode | Endpoint | Description | Auth |
+|---|---|---|---|
+| GET | `/scan/<ip>` | Lance un scan | oui (5/min) |
+| GET | `/rapport/<ip>` | HTML — `?format=json\|pdf` | oui |
+| GET | `/history` · `/history/<ip>` | Historique persistant | oui |
+| GET | `/version` · `/health` | Métadonnées build / probe | non |
 
-> **Rate limiting.** `GET /scan/<ip>` est limité à 5 requêtes par minute et par IP source (configurable via Flask-Limiter). Les autres endpoints héritent des limites globales `200/jour, 60/heure`.
+Auth par header `X-API-Key` (comparaison à temps constant). Rate limit Flask-Limiter. Path-traversal checké sur `/rapport/<ip>`.
 
 ---
 
 ## Configuration
 
-Copiez `.env.example` en `.env` et ajustez :
-
 ```bash
-cp .env.example .env
+cp .env.example .env   # ajuster ensuite
 ```
 
-| Variable | Défaut | Description |
+| Variable | Défaut | Rôle |
 |---|---|---|
-| `API_KEY` | *(vide)* | Clé d'authentification — laisser vide en dev |
-| `NMAP_TIMEOUT` | `300` | Timeout Nmap en secondes |
-| `REPORT_DIR` | `/app/rapports` | Dossier de sauvegarde des rapports HTML |
-| `CACHE_SIZE` | `32` | Nombre d'IPs mémorisées en cache |
-| `LOG_FILE_PATH` | `/app/logs/scan.log` | Chemin du fichier de log |
-| `HISTORY_DB_PATH` | `/app/netaudit.db` | Base SQLite de l'historique des scans |
-| `CACHE_DIR` | `/app/cache` | Dossier cache KEV + EPSS, TTL 24 h |
-| `PRIORITIZER_ENABLED` | `1` | Mettre à `0` pour désactiver les appels réseau (offline strict) |
-| `BUILD_COMMIT` | *(vide)* | Hash commit injecté au build Docker, exposé par `/version` |
+| `API_KEY` | *(vide)* | Auth ; vide = mode dev sans auth |
+| `NMAP_TIMEOUT` | `300` | Timeout Nmap (secondes) |
+| `CACHE_DIR` | `./cache` | Cache KEV/EPSS, TTL 24 h |
+| `HISTORY_DB_PATH` | `./netaudit.db` | SQLite historique |
+| `PRIORITIZER_ENABLED` | `1` | `0` = offline strict (CVSS seul) |
+| `BUILD_COMMIT` | *(vide)* | Hash injecté au build, exposé par `/version` |
+
+Toutes les variables sont listées dans `.env.example`.
 
 ---
 
-## Fonctionnalités
+## Comment le score de priorité est calculé
 
-**Scan réseau**
-- Nmap + script Vulners — détection des CVEs par service et version
-- Parsing structuré — sortie Nmap convertie en JSON propre
-- Validation IP robuste — module `ipaddress` (IPv4 + IPv6, résiste aux injections)
-- Cache LRU — évite de rescanner une même IP inutilement
+```
+priority = CVSS
+         + 3.0  si CVE présente dans CISA KEV  (exploitation avérée)
+         + 1.5  si KEV flag ransomware          (impact opérationnel élevé)
+         + 2.0 × EPSS  si EPSS ≥ 0.5            (probabilité forte)
+         + 1.0 × EPSS  si EPSS < 0.5
 
-**Corrélation MITRE ATT&CK**
-- Mapping service/port → techniques (confiance haute, 47 services couverts)
-- Mapping CVE → techniques en trois couches complémentaires :
-  - Catalogue de CVEs célèbres (Log4Shell, EternalBlue, Heartbleed, …) → CWE → techniques précises
-  - Mapping CWE → techniques (26 CWEs cataloguées)
-  - Heuristique CVSS + contexte service en filet de sécurité
-- Chemin d'attaque hypothétique ordonné selon le kill chain MITRE complet (14 tactiques)
-- Calcul du niveau de risque global : CRITICAL / HIGH / MEDIUM / LOW
-- 5 priorités de détection extraites automatiquement
-- Mitigations concrètes proposées par technique
-- Base de données locale : **79 techniques ATT&CK**, 26 CWEs, **47 services**, 39 CVEs connues
-- Couverture 2.5.0 renforcée — Active Directory (Kerberoasting, AS-REP, LLMNR/AITM, Pass-the-Hash/Ticket, Domain Trust Discovery, GPO abuse), cloud native (container admin / deploy, etcd, Vault, Consul), IoT/OT (MQTT, Modbus), management out-of-band (IPMI/BMC, WinRM), ransomware (Inhibit System Recovery)
+Niveaux :  IMMEDIATE ≥ 13   HIGH ≥ 10   MEDIUM ≥ 6   LOW ≥ 3   INFO
+```
 
-**Priorisation réelle (EPSS + CISA KEV)**
-- Flag CISA KEV — chaque CVE croisée avec le catalogue officiel *Known Exploited Vulnerabilities*
-- Score FIRST EPSS (0–1) — probabilité d'exploitation à 30 jours, recalculé quotidiennement
-- Flag ransomware distinct — CVEs documentées dans des campagnes actives
-- Score de priorité combiné : CVSS + 3.0 (KEV) + 1.5 (ransomware) + 2.0 × EPSS (≥ 0.5) ou 1.0 × EPSS
-- Niveaux : IMMEDIATE ≥ 13 / HIGH ≥ 10 / MEDIUM ≥ 6 / LOW ≥ 3 / INFO
-- Cache disque agrégé, TTL 24 h — second scan de la journée sans appel réseau
-- **GET conditionnel `If-Modified-Since`** sur le catalogue CISA KEV (~1 Mo) — au refresh, un `304 Not Modified` évite le retéléchargement et rafraîchit juste le TTL local
-- Offline-safe — échec réseau sans cache = scan continue sans enrichissement, cache périmé réutilisé en mode dégradé
-- Bloc « Top priorités d'action » affiché en tête du rapport HTML
+**Chaque CVE affiche *pourquoi* son niveau a été attribué** (`priority_reasons`) — pas de boîte noire. Exemple :
 
-**Détection contextuelle (rôle + posture)**
-- Classification automatique du rôle de l'hôte — 12 catégories (web, DB, mail, DNS, IoT, admin, monitoring, file, directory, hypervisor, VoIP, workstation)
-- Signatures pondérées : ports + services → score par rôle, meilleur gagne, marge → confiance (high / medium / low)
-- 12 règles anti-pattern embarquées :
-  - DB publiquement exposée *(CRITICAL)*
-  - Telnet actif *(CRITICAL)* — credentials en clair
-  - FTP sans TLS *(HIGH)* — avec détection FTPS pour éviter le faux positif
-  - TFTP exposé *(HIGH)*
-  - SNMP public *(HIGH)* — community string par défaut
-  - OS en fin de vie *(HIGH)* — XP, 2003, 2008, 7, Linux 2.6, CentOS 5/6, …
-  - Version de service non-supportée *(HIGH)* — Apache 2.2, OpenSSH 5/6, PHP 5, OpenSSL 1.0.x, … (regex à frontière)
-  - DB + web colocalisés *(HIGH)* — pivot local en cas de RCE web
-  - IoT avec management exposé *(HIGH)* — Telnet, CWMP/TR-069
-  - Multi-protocole d'admin *(MEDIUM)*
-  - Serveur web sans HTTPS *(MEDIUM)* — conditionné au rôle inféré
-  - Surface d'attaque élargie *(MEDIUM)* — > 15 ports ouverts
-- Chaque finding = sévérité + description + recommandation concrète + evidence
-- Score de posture 0–100 (100 − pénalités), grade A (≥ 90) / B (≥ 75) / C (≥ 55) / D (≥ 35) / F
-- 100 % local, déterministe — scores comparables entre scans
+- `CISA KEV — exploitation active confirmée`
+- `Campagnes ransomware documentées`
+- `EPSS 0.88 — probabilité forte d'exploitation à 30 jours`
+- `CVSS 9.8 (critique)`
 
-**Baseline historique & détection de dérive**
-- Chaque scan se compare automatiquement au précédent scan de la même IP (via SQLite local)
-- Alertes typées et niveau calibré :
-  - **critical** — port DB/admin qui apparaît, CVE KEV/ransomware ajoutée, escalade KEV d'une CVE existante, finding CRITICAL nouveau, chute de posture ≥ 20 pts
-  - **warning** — autres ports ajoutés, CVE HIGH (CVSS ≥ 7) ajoutée, finding HIGH nouveau, régression de version sur port sensible, chute posture 10–19 pts, changement de rôle
-  - **neutral** — CVE MEDIUM/LOW ajoutée, finding MEDIUM/LOW nouveau, bump de version mineur
-  - **positive** — ports fermés, CVEs patchées, findings résolus, posture en hausse ≥ 5 pts
-- Escalade KEV détectée explicitement — une CVE présente dans les deux scans mais qui vient de basculer dans CISA KEV est traitée comme critique
-- Baseline embarqué dans la data persistée → pas de recalcul, accessible via `/history/<ip>` ou `/rapport/<ip>?format=json`
-- Premier scan → état explicite « premier scan », détection active dès le 2ᵉ passage
-- 100 % local, déterministe — aucune dépendance réseau
-
-**Rapport & UX**
-- Rapport HTML dark-mode avec donut SVG de répartition des sévérités CVSS
-- Meta-cards synthétiques : IP, date, ports, vulnérabilités, **rôle détecté + confiance**, **priorité max + KEV/ransomware count**, **grade de posture (A–F) + jauge 0–100**, **synthèse de dérive vs scan précédent** (critique/warning/stable)
-- Bloc « Top priorités d'action » en tête du rapport — 5 CVEs les plus urgentes selon le score combiné (CVSS + KEV + EPSS + ransomware)
-- Section « Dérive historique » — bannière colorée (critical/warning/clean) + cartes d'alertes typées avec evidence, triées par niveau (critical d'abord)
-- Section « Posture & recommandations » — findings triés par sévérité, chaque carte expose description + recommandation concrète + evidence
-- Badges KEV / RANSOM / priorité (IMMEDIATE/HIGH/…) et score EPSS affichés à côté de chaque CVE dans le tableau des ports
-- Kill chain MITRE ATT&CK cliquable — chaque phase active scroll vers sa fiche
-- Filtre de recherche sur les ports (n°, service, version, CVE) — vanilla JS
-- Bouton « Copier en Markdown » — rapport complet (dérive + priorités + posture + ATT&CK + ports) prêt à coller dans Jira / PR / ticket
-- Styles d'impression dédiés (`@media print`) — URLs révélées, couleurs claires
-- Exports alternatifs : `?format=json` (data brute avec priority_summary, context et baseline) et `?format=pdf` (A4 téléchargeable, généré via reportlab, table de dérive + section posture incluses)
-
-**Historique & persistance**
-- Base SQLite locale — scans enregistrés à chaque `/scan/<ip>`, survit au redémarrage
-- `GET /history` — liste synthétique avec risk_level et total_vulns
-- `GET /history/<ip>` — historique détaillé d'une IP (data complète)
-
-**Sécurité & infrastructure**
-- Authentification API key — header `X-API-Key`, comparaison à temps constant via `hmac.compare_digest`
-- Rate limiting — 5 scans par minute par IP
-- Protection path-traversal — accès aux rapports sécurisé
-- Gunicorn — serveur de production (remplace le serveur de dev Flask)
-- Docker-ready — image slim Python 3.11, HEALTHCHECK HTTP natif
-- Endpoint `/version` — traçabilité précise de l'image déployée (version + hash commit)
-- Logs dupliqués fichier rotaté + stdout — compatibles `docker logs` et agrégateurs
+Les coefficients sont volontairement simples et explicables. Ils traduisent une règle métier : *une CVSS 7 activement exploitée doit sortir au-dessus d'une CVSS 9 inutilisée dans la nature*. Voir `src/prioritizer.py` pour les choix d'implémentation.
 
 ---
 
-## Tests
+## Tests & CI
 
 ```bash
 pip install -r requirements.txt
-pytest tests/ -v
+PRIORITIZER_ENABLED=0 pytest tests/ -q
 ```
 
-**321 tests** — validation IP, parsing Nmap XML, endpoints API (scan, rapport, history, version, health), corrélation ATT&CK (service mapping, CVE mapping, CWE mapping, catalogue CVEs connues, déduplication, calcul de risque, chemin d'attaque, intégrité du catalogue **technique + services**, garde-fous anti-régression sur les 17 techniques et 17 services ajoutés en 2.5.0), persistance SQLite (insertion, lecture, filtrage par IP), génération PDF (smoke test binaire, robustesse aux données partielles), priorisation EPSS + KEV (formule de score, seuils de niveau, cache TTL, batch API, fallback offline, dégradation sur cache périmé, **conditional GET `If-Modified-Since` + réponse `304 Not Modified`**), détection contextuelle (classification 12 rôles, 12 règles anti-pattern avec frontières regex pour éviter les faux positifs, scénarios d'intégration), baseline historique (diff ports / versions / CVEs / findings / posture / rôle, niveau d'alerte par catégorie, escalade KEV, scénarios complets de compromission et de remédiation).
-
-La CI GitHub Actions exécute `pytest` sur **Python 3.11 + 3.12** et valide le `docker build` à chaque push sur `main` et chaque pull request.
+**335 tests**, hermétiques (aucun appel réseau), exécution < 1 s. CI GitHub Actions sur Python 3.11 + 3.12, `docker build` validé à chaque push.
 
 ---
 
-## Structure du projet
+## Structure
 
 ```
 netaudit/
 ├── src/
-│   ├── scan.py              # Moteur de scan, parser Nmap XML, orchestration
-│   ├── webapp.py            # API REST Flask (scan, rapport, history, version, health)
-│   ├── attack_mapper.py     # Corrélation MITRE ATT&CK — techniques, chemin, risque
-│   ├── history.py           # Persistance SQLite + accès historique
-│   ├── prioritizer.py       # Priorisation EPSS + CISA KEV, cache 24 h, offline-safe
-│   ├── profiler.py          # Classification rôle + 12 règles anti-pattern, score posture
-│   ├── baseline.py          # Diff vs scan précédent, alertes de dérive typées
-│   ├── exports.py           # Génération PDF via reportlab
-│   ├── version.py           # Version sémantique + hash commit
-│   ├── data/
-│   │   ├── techniques.json       # 79 techniques ATT&CK (détection + mitigations, AD + cloud + IoT/OT)
-│   │   ├── service_mapping.json  # 47 services → techniques (confiance haute)
-│   │   ├── cwe_mapping.json      # 26 CWEs → techniques
-│   │   └── known_cves.json       # 39 CVEs célèbres → CWE (mapping précis)
-│   └── templates/
-│       └── rapport.html     # Template Jinja2 — dark-mode, donut, kill chain, filtre, export MD
-├── tests/
-│   ├── test_scan.py         # Validation IP, parsing Nmap XML
-│   ├── test_webapp.py       # Endpoints API, auth, formats d'export, historique
-│   ├── test_attack_mapper.py # Corrélation ATT&CK (117 cas)
-│   ├── test_history.py      # Persistance SQLite (14 cas)
-│   ├── test_exports.py      # Génération PDF (6 cas)
-│   ├── test_prioritizer.py  # Priorisation EPSS + KEV (35 cas)
-│   ├── test_profiler.py     # Classification rôle + posture (47 cas)
-│   └── test_baseline.py     # Diff scans + alertes de dérive (40 cas)
-├── .env.example             # Modèle de configuration
-├── Dockerfile               # Image slim Python 3.11 + Nmap, Gunicorn, HEALTHCHECK
-└── requirements.txt         # Dépendances avec versions fixées
+│   ├── scan.py              Moteur Nmap + parser XML + orchestration
+│   ├── webapp.py            API REST Flask
+│   ├── prioritizer.py       Score CVSS + KEV + EPSS, raisons explicables
+│   ├── attack_mapper.py     Corrélation MITRE ATT&CK
+│   ├── profiler.py          Classification rôle + 12 règles de posture
+│   ├── baseline.py          Diff vs scan précédent
+│   ├── history.py           Persistance SQLite
+│   ├── exports.py           JSON + PDF (reportlab)
+│   └── data/                Catalogues ATT&CK + CWE + services + CVEs
+├── scripts/
+│   ├── refresh_known_cves.py  Sync KEV → known_cves.json
+│   └── render_demo.py         Rend un rapport de démonstration
+├── tests/                  335 tests unitaires + d'intégration
+├── docs/img/               Captures d'écran, rapport de démo
+├── Dockerfile              Image slim Python 3.11 + Nmap, HEALTHCHECK
+└── requirements.txt        Versions fixées
 ```
 
 ---
 
 ## Limitations
 
-> NetAudit est un outil d'audit rapide et d'apprentissage.
-> La corrélation ATT&CK est heuristique (basée sur le score CVSS et le service) — elle donne des pistes, pas des certitudes.
-> La priorisation EPSS + KEV nécessite un accès réseau aux endpoints publics CISA et FIRST ; en mode offline strict (`PRIORITIZER_ENABLED=0`), seul le CVSS est utilisé.
-> Le cache Nmap (`lru_cache` sur `_scan_cached`) est **in-process, non partagé entre workers Gunicorn** : deux scans consécutifs de la même IP peuvent relancer un vrai Nmap s'ils tombent sur des workers différents. Acceptable pour un déploiement single-host ; pour un scale horizontal ou un partage strict, migrer vers Redis / Memcached.
-> Il ne remplace pas des solutions professionnelles comme Nessus, OpenVAS, ou une analyse manuelle des CVEs.
+- Outil d'audit rapide et d'apprentissage — **pas** un remplaçant de Nessus / OpenVAS.
+- La corrélation ATT&CK est heuristique ; elle donne des pistes, pas des certitudes.
+- La priorisation EPSS+KEV dépend d'un accès réseau à CISA/FIRST. En mode `PRIORITIZER_ENABLED=0`, seul le CVSS est utilisé.
+- Cache Nmap `lru_cache` **in-process** — deux workers Gunicorn ne partagent pas leur cache. Acceptable en single-host, à migrer vers Redis pour un scale horizontal.
+
+Pour le détail des changements : voir [`CHANGELOG.md`](CHANGELOG.md).
+Pour signaler une vulnérabilité : voir [`SECURITY.md`](SECURITY.md).
 
 ---
 
 ## Licence
 
-MIT — Utilisation libre et modifiable. Voir `LICENSE`.
+MIT — voir `LICENSE`.

@@ -461,7 +461,7 @@ def enrich_scan_result(data: dict) -> dict:
         data["attack_summary"] = _generate_attack_path(all_techniques)
 
     except Exception as exc:  # pylint: disable=broad-except
-        logging.error("Erreur lors de l'enrichissement ATT&CK : %s", exc)
+        logging.error("Erreur lors de l'enrichissement ATT&CK", exc_info=True)
         data["attack_summary"] = {
             "phases": [],
             "phases_count": 0,

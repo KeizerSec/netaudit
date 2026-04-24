@@ -706,6 +706,34 @@
         .top-vuln-row .vport { color: var(--muted); font-size: 0.72rem; }
         .top-vuln-row .vscore { margin-left: auto; color: var(--text); font-weight: 700; }
 
+        /* ── Chips d'explicabilité — pourquoi cette priorité ? ─ */
+        .reasons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3rem;
+            margin-top: 0.3rem;
+            flex-basis: 100%;
+        }
+        .reason-chip {
+            display: inline-block;
+            padding: 0.1rem 0.45rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--muted);
+        }
+        .reason-kev           { background: rgba(248,81,73,0.15);  color: #ff8787; border-color: rgba(248,81,73,0.45); }
+        .reason-ransomware    { background: #3a0a0a;               color: #ffb3b3; border-color: var(--red); }
+        .reason-epss_high     { background: rgba(219,109,40,0.18); color: var(--orange); border-color: rgba(219,109,40,0.4); }
+        .reason-epss_medium   { background: rgba(210,153,34,0.15); color: var(--yellow); border-color: rgba(210,153,34,0.4); }
+        .reason-cvss_critical { background: rgba(248,81,73,0.12);  color: #ff8787; border-color: rgba(248,81,73,0.35); }
+        .reason-cvss_high     { background: rgba(219,109,40,0.12); color: var(--orange); border-color: rgba(219,109,40,0.3); }
+        .reason-cvss_medium   { background: rgba(210,153,34,0.1);  color: var(--yellow); border-color: rgba(210,153,34,0.3); }
+        .reason-cvss_low      { background: rgba(63,185,80,0.1);   color: var(--green);  border-color: rgba(63,185,80,0.3); }
+
         /* ── Contexte : rôle + posture ───────────────────── */
         .role-badge {
             display: inline-block;
@@ -1144,6 +1172,43 @@
 </div>
 {% endif %}
 
+<!-- ── Top priorités d'action — visible immédiatement après les meta-cards -->
+{% if data.priority_summary and data.priority_summary.top %}
+{% set ps = data.priority_summary %}
+<div class="priority-block">
+    <h3>Top priorités d'action</h3>
+    {% for item in ps.top %}
+    <div class="top-vuln-row">
+        <span class="priority-badge priority-{{ item.priority_level | lower }}">{{ item.priority_level }}</span>
+        <span class="vcve">{{ item.id }}</span>
+        <span class="vport">port {{ item.port }}</span>
+        {% if item.ransomware %}
+            <span class="kev-flag ransomware">RANSOM</span>
+        {% elif item.in_kev %}
+            <span class="kev-flag">KEV</span>
+        {% endif %}
+        <span class="vscore">{{ "%.2f" | format(item.priority_score) }}</span>
+        {% if item.reasons %}
+        <div class="reasons" aria-label="Raisons du score">
+            {% for r in item.reasons %}
+                <span class="reason-chip reason-{{ r.code }}">{{ r.label }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% if ps.sources_used %}
+    <div class="sources">
+        Sources : {{ ps.sources_used | join(' · ') }}. Score = CVSS + 3.0 si KEV + 1.5 si ransomware + EPSS pondéré.
+    </div>
+    {% else %}
+    <div class="sources">
+        Enrichissement réseau indisponible — priorisation basée sur CVSS seul.
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- ── Baseline : dérive vs scan précédent ───────────────── -->
 {% if data.baseline %}
 {% set bsn = data.baseline %}
@@ -1263,7 +1328,8 @@
                                 </span>
                             {% endif %}
                             {% if v.priority_level %}
-                                <span class="priority-badge priority-{{ v.priority_level | lower }}" title="Score priorité {{ v.priority_score }}">{{ v.priority_level }}</span>
+                                {% set reason_labels = (v.priority_reasons or []) | map(attribute='label') | list %}
+                                <span class="priority-badge priority-{{ v.priority_level | lower }}" title="Score priorité {{ v.priority_score }}{% if reason_labels %} — {{ reason_labels | join(' · ') }}{% endif %}">{{ v.priority_level }}</span>
                             {% endif %}
                             {% if v.epss and v.epss.score is defined %}
                                 <span class="epss-score" title="EPSS {{ '%.1f' | format(v.epss.percentile * 100) }}ᵉ percentile">EPSS {{ '%.3f' | format(v.epss.score) }}</span>
@@ -1284,36 +1350,6 @@
     {% if not data.error %}
     <p class="no-ports">Aucun port ouvert détecté sur cet hôte.</p>
     {% endif %}
-{% endif %}
-
-<!-- ── Priorités d'action (EPSS + CISA KEV) ───────────────── -->
-{% if data.priority_summary and data.priority_summary.top %}
-{% set ps = data.priority_summary %}
-<div class="priority-block">
-    <h3>Top priorités d'action</h3>
-    {% for item in ps.top %}
-    <div class="top-vuln-row">
-        <span class="priority-badge priority-{{ item.priority_level | lower }}">{{ item.priority_level }}</span>
-        <span class="vcve">{{ item.id }}</span>
-        <span class="vport">port {{ item.port }}</span>
-        {% if item.ransomware %}
-            <span class="kev-flag ransomware">RANSOM</span>
-        {% elif item.in_kev %}
-            <span class="kev-flag">KEV</span>
-        {% endif %}
-        <span class="vscore">{{ "%.2f" | format(item.priority_score) }}</span>
-    </div>
-    {% endfor %}
-    {% if ps.sources_used %}
-    <div class="sources">
-        Sources : {{ ps.sources_used | join(' · ') }}. Score = CVSS + 3.0 si KEV + 1.5 si ransomware + EPSS pondéré.
-    </div>
-    {% else %}
-    <div class="sources">
-        Enrichissement réseau indisponible — priorisation basée sur CVSS seul.
-    </div>
-    {% endif %}
-</div>
 {% endif %}
 
 <!-- ── Section ATT&CK ─────────────────────────────────────── -->
@@ -1528,6 +1564,11 @@ function buildMarkdown(data) {
                        " — port " + t.port +
                        " — score " + (t.priority_score || 0).toFixed(2) +
                        (flags.length ? " — " + flags.join(", ") : ""));
+            if (t.reasons && t.reasons.length) {
+                t.reasons.forEach(function (r) {
+                    lines.push("  - " + r.label);
+                });
+            }
         });
         lines.push("");
     }

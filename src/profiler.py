@@ -34,6 +34,7 @@ Contraintes d'intégration
 """
 from __future__ import annotations
 
+import logging
 import re
 from typing import Iterable
 
@@ -523,9 +524,14 @@ def analyze_posture(data: dict, role: str) -> list[dict]:
         try:
             result = rule(data, role)
         except Exception:
-            # Une règle défaillante ne doit pas faire tomber toute l'analyse.
+            # Une règle défaillante ne doit pas faire tomber toute l'analyse,
+            # mais on trace le traceback — sans ça, une régression passe muette.
+            logging.warning("Règle posture %s a levé une exception", rule.__name__, exc_info=True)
             continue
         if result:
+            # rule_id = nom de la fonction, stable à travers les reformulations
+            # de titre. Utilisé par baseline._diff_findings pour un diff robuste.
+            result.setdefault("rule_id", rule.__name__)
             findings.append(result)
     order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
     findings.sort(key=lambda f: order.get(f.get("severity", "INFO"), 4))

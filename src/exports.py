@@ -318,6 +318,73 @@ def _build_baseline_section(data: dict, styles) -> list:
     return flow
 
 
+def _build_priority_section(data: dict, styles) -> list:
+    """Section « Top priorités d'action » avec raisons explicables par CVE.
+
+    C'est le premier contenu après l'en-tête : le lecteur voit directement
+    les 5 CVEs les plus urgentes et *pourquoi* elles le sont (KEV, ransomware,
+    EPSS, CVSS) avant d'avoir à fouiller le détail des ports.
+    """
+    ps = data.get("priority_summary") or {}
+    top = ps.get("top") or []
+    if not top:
+        return []
+
+    h2 = ParagraphStyle(
+        "H2", parent=styles["Heading2"], fontSize=14,
+        textColor=colors.HexColor("#0F172A"), spaceBefore=12, spaceAfter=6,
+    )
+    flow = [Paragraph("Top priorités d'action", h2)]
+
+    sources = ps.get("sources_used") or []
+    if sources:
+        flow.append(Paragraph(
+            f"<font color='#475569'>Sources : {' · '.join(sources)} — "
+            f"score = CVSS + 3.0 si KEV + 1.5 si ransomware + EPSS pondéré.</font>",
+            styles["Normal"],
+        ))
+    else:
+        flow.append(Paragraph(
+            "<font color='#475569'><i>Enrichissement réseau indisponible — "
+            "priorisation basée sur le CVSS seul.</i></font>",
+            styles["Normal"],
+        ))
+    flow.append(Spacer(1, 4))
+
+    cell = ParagraphStyle("CellP", parent=styles["Normal"], fontSize=8, leading=10)
+    rows = [["Priorité", "CVE", "Port", "Score", "Raisons"]]
+    for t in top:
+        level = (t.get("priority_level") or "INFO").upper()
+        lvl_color = _style_for_risk(level).hexval()
+        reasons = t.get("reasons") or []
+        reasons_html = "<br/>".join(f"• {r.get('label', '')}" for r in reasons) or "—"
+        rows.append([
+            Paragraph(f'<font color="{lvl_color}"><b>{level}</b></font>', cell),
+            Paragraph(t.get("id") or "?", cell),
+            Paragraph(str(t.get("port") or "—"), cell),
+            Paragraph(f'{float(t.get("priority_score") or 0):.2f}', cell),
+            Paragraph(reasons_html, cell),
+        ])
+    tbl = Table(rows, colWidths=[22 * mm, 33 * mm, 15 * mm, 18 * mm, 77 * mm], repeatRows=1)
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND",     (0, 0), (-1, 0), colors.HexColor("#1E293B")),
+        ("TEXTCOLOR",      (0, 0), (-1, 0), colors.white),
+        ("FONTNAME",       (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE",       (0, 0), (-1, -1), 9),
+        ("ALIGN",          (0, 0), (-1, -1), "LEFT"),
+        ("VALIGN",         (0, 0), (-1, -1), "TOP"),
+        ("GRID",           (0, 0), (-1, -1), 0.3, colors.HexColor("#CBD5E1")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+        ("LEFTPADDING",    (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING",   (0, 0), (-1, -1), 5),
+        ("TOPPADDING",     (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING",  (0, 0), (-1, -1), 4),
+    ]))
+    flow.append(tbl)
+    flow.append(Spacer(1, 6))
+    return flow
+
+
 def _score_color(score: float) -> colors.Color:
     try:
         s = float(score)
@@ -351,6 +418,7 @@ def render_pdf(data: dict) -> bytes:
 
     story: list[Any] = []
     story.extend(_build_header(data, styles))
+    story.extend(_build_priority_section(data, styles))
     story.extend(_build_baseline_section(data, styles))
     story.extend(_build_context_section(data, styles))
     story.extend(_build_attack_summary(data, styles))
