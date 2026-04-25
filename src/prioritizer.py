@@ -80,12 +80,24 @@ def _read_cache(name: str) -> tuple[dict | None, bool]:
 
 
 def _write_cache(name: str, payload: dict) -> None:
+    """Écrit le cache de manière atomique : tempfile dans le même dossier
+    puis `os.replace`. Évite la corruption si deux workers refresh en même
+    temps — un lecteur ne verra jamais un fichier partiellement écrit.
+    `os.replace` est atomique sur POSIX et Windows (même filesystem).
+    """
     path = _cache_path(name)
+    tmp_path = f"{path}.tmp.{os.getpid()}"
     try:
-        with open(path, "w", encoding="utf-8") as f:
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(payload, f)
+        os.replace(tmp_path, path)
     except OSError as exc:
         logging.warning("Écriture cache %s échouée : %s", name, exc)
+        # Nettoyage du tempfile si l'échec est arrivé avant le replace.
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 def _touch_cache(name: str) -> None:
@@ -100,7 +112,7 @@ def _touch_cache(name: str) -> None:
 
 def _http_get_json(url: str, timeout: int = HTTP_TIMEOUT) -> dict | None:
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "NetAudit/2.6"})
+        req = urllib.request.Request(url, headers={"User-Agent": "NetAudit/2.6.2"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError,
@@ -121,7 +133,7 @@ def _http_get_json_conditional(
     - 304 Not Modified → `(None, last_modified, 304)` (appelant garde son cache)
     - Échec / erreur → `(None, None, 0)`
     """
-    headers = {"User-Agent": "NetAudit/2.6"}
+    headers = {"User-Agent": "NetAudit/2.6.2"}
     if last_modified:
         headers["If-Modified-Since"] = last_modified
     try:

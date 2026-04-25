@@ -2,8 +2,10 @@
 Tests unitaires pour src/webapp.py
 Lance avec : pytest tests/ depuis la racine du projet.
 """
+import subprocess
 import sys
 import os
+import textwrap
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -241,3 +243,53 @@ class TestErreurs:
         resp = client.get("/route/inexistante")
         assert resp.status_code == 404
         assert "not_found" in resp.get_json()["status"]
+
+
+# ─── Régression 2.6.2 : ordonnancement load_dotenv ────────────────────────────
+
+class TestDotenvOrdering:
+    """Regression test — `load_dotenv` doit s'exécuter **avant** les imports
+    applicatifs, sinon les variables lues au module-level dans scan.py et
+    history.py (LOG_FILE_PATH, HISTORY_DB_PATH, etc.) sont ignorées.
+
+    On teste dans un sous-processus pour avoir un environnement vierge et un
+    import sequence réaliste — impossible à simuler dans le même process où
+    webapp est déjà importé.
+    """
+
+    def test_env_file_est_honore_par_scan_et_history(self, tmp_path):
+        env_file = tmp_path / ".env"
+        expected_log = tmp_path / "app.log"
+        expected_db  = tmp_path / "app.db"
+        env_file.write_text(
+            f"LOG_FILE_PATH={expected_log}\n"
+            f"HISTORY_DB_PATH={expected_db}\n"
+            f"PRIORITIZER_ENABLED=0\n"
+            "API_KEY=\n",
+            encoding="utf-8",
+        )
+
+        src_dir = os.path.join(os.path.dirname(__file__), "..", "src")
+        src_dir = os.path.abspath(src_dir)
+
+        script = textwrap.dedent(f"""
+            import os, sys
+            os.chdir({str(tmp_path)!r})
+            sys.path.insert(0, {src_dir!r})
+            # Retirer toute valeur potentiellement héritée
+            for k in ("LOG_FILE_PATH", "HISTORY_DB_PATH"):
+                os.environ.pop(k, None)
+            import webapp  # déclenche load_dotenv + imports
+            from scan import LOG_FILE_PATH
+            from history import DB_PATH
+            print("LOG_FILE_PATH=" + LOG_FILE_PATH)
+            print("DB_PATH=" + DB_PATH)
+        """).strip()
+
+        proc = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True, text=True, timeout=15,
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert f"LOG_FILE_PATH={expected_log}" in proc.stdout
+        assert f"DB_PATH={expected_db}" in proc.stdout

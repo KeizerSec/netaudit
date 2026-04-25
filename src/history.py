@@ -57,14 +57,21 @@ def _connect() -> Iterator[sqlite3.Connection]:
 
 
 def init_db() -> None:
-    """Crée le schéma si absent. Idempotent, safe à appeler à chaque démarrage.
+    """Crée le schéma si absent + active le mode WAL. Idempotent.
 
     **À appeler explicitement** au démarrage de l'application (webapp, CLI) —
     le module ne fait plus ce travail à l'import pour éviter les side-effects
     surprenants dans les tests, les imports croisés et les outils d'analyse
     qui parcourent le code sans intention d'ouvrir la base.
+
+    Le mode WAL (write-ahead logging) permet aux lecteurs et à un écrivain
+    de travailler simultanément sans se bloquer — utile avec plusieurs
+    workers Gunicorn qui consultent `/history` pendant qu'un `/scan` insère
+    un nouveau record. Le `PRAGMA` est persistant : appliqué une seule fois
+    sur la base, il reste actif jusqu'à suppression du fichier.
     """
     with _connect() as conn:
+        conn.execute("PRAGMA journal_mode=WAL;")
         conn.executescript(_SCHEMA)
 
 

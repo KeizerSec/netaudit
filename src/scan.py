@@ -225,8 +225,12 @@ def _scan_cached(ip: str) -> dict:
     workers, migrer vers un cache externe (Redis, Memcached).
     """
     logging.info("Scan démarré pour %s", ip)
+    # Le séparateur `--` bloque l'interprétation comme option nmap même si
+    # `ip` commençait par un tiret (`--iflist`, `-sn`, …). valider_ip() filtre
+    # déjà tous ces cas dans le flux applicatif, c'est une défense en
+    # profondeur pour les appels directs à ce helper.
     proc = subprocess.run(
-        ["nmap", "--script", "vulners", "-sV", "-oX", "-", ip],
+        ["nmap", "--script", "vulners", "-sV", "-oX", "-", "--", ip],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         timeout=NMAP_TIMEOUT,

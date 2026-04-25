@@ -63,6 +63,19 @@ class TestInitDb:
         history_module.init_db()
         history_module.init_db()
 
+    def test_active_le_mode_wal(self, history_module):
+        """Regression test (2.6.2) — init_db doit activer journal_mode=WAL.
+
+        La docstring historique annonçait WAL mais le PRAGMA n'était jamais
+        appliqué, la base tournait en mode `delete`. Ce test garantit que
+        le comportement reste aligné sur la documentation.
+        """
+        import sqlite3
+        conn = sqlite3.connect(history_module.DB_PATH)
+        mode = conn.execute("PRAGMA journal_mode;").fetchone()[0]
+        conn.close()
+        assert mode.lower() == "wal"
+
 
 class TestRecordScan:
     def test_insertion_retourne_id(self, history_module):

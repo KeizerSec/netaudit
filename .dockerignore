@@ -1,0 +1,45 @@
+# Ne jamais embarquer le .env dans l'image (secrets !)
+.env
+.env.*
+!.env.example
+
+# Historique / caches locaux — reconstruits au runtime dans le volume
+netaudit.db
+*.db-journal
+*.db-wal
+*.db-shm
+cache/
+rapports/
+scan.log
+logs/
+
+# Git + outils locaux — inutile en image, amincit le layer COPY
+.git/
+.gitignore
+.github/
+
+# Python local
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+.claude/
+
+# Documentation / notes non nécessaires à l'exécution
+docs/
+P1/
+*.txt
+!requirements*.txt
+
+# Tests — l'image n'en a pas besoin à l'exécution (CI les lance avant build)
+tests/

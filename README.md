@@ -108,7 +108,7 @@ pip install -r requirements.txt
 PRIORITIZER_ENABLED=0 pytest tests/ -q
 ```
 
-**335 tests**, hermétiques (aucun appel réseau), exécution < 1 s. CI GitHub Actions sur Python 3.11 + 3.12, `docker build` validé à chaque push.
+**341 tests**, hermétiques (aucun appel réseau), exécution < 1 s. CI GitHub Actions sur Python 3.11 + 3.12, `docker build` validé à chaque push.
 
 ---
 
@@ -129,7 +129,7 @@ netaudit/
 ├── scripts/
 │   ├── refresh_known_cves.py  Sync KEV → known_cves.json
 │   └── render_demo.py         Rend un rapport de démonstration
-├── tests/                  335 tests unitaires + d'intégration
+├── tests/                  341 tests unitaires + d'intégration
 ├── docs/img/               Captures d'écran, rapport de démo
 ├── Dockerfile              Image slim Python 3.11 + Nmap, HEALTHCHECK
 └── requirements.txt        Versions fixées

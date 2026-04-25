@@ -5,6 +5,40 @@ Toutes les évolutions notables du projet sont listées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versions alignées sur [SemVer](https://semver.org/).
 
+## [2.6.2] — 2026-04-25
+
+### Corrigé
+
+- **webapp.py** — `load_dotenv()` est désormais appelé **avant** tout import
+  applicatif. Avant ce correctif, les variables lues au module-level dans
+  `scan.py` (`LOG_FILE_PATH`, `REPORT_DIR`, `NMAP_TIMEOUT`, `CACHE_SIZE`) et
+  `history.py` (`HISTORY_DB_PATH`) étaient silencieusement ignorées quand
+  elles n'étaient définies que dans `.env`. Test de régression subprocess
+  dans `TestDotenvOrdering`.
+- **history.py** — `PRAGMA journal_mode=WAL` appliqué par `init_db`. La
+  docstring annonçait WAL depuis 2.4 mais le pragma n'était jamais exécuté,
+  la base tournait en mode `delete`. Impact : lectures et écritures
+  concurrentes ne se bloquent plus. Test de régression `test_active_le_mode_wal`.
+- **prioritizer.py** — `_write_cache` passe par un tempfile puis
+  `os.replace` atomique. Évite la corruption du cache KEV/EPSS si deux
+  workers Gunicorn refresh en même temps.
+- **scan.py** — ajout du séparateur `--` avant `ip` dans l'appel nmap
+  (`subprocess.run([..., "--", ip])`). Défense en profondeur contre une
+  injection d'argument si la fonction est appelée sans passer par
+  `valider_ip()` (pas exploitable via l'API publique).
+
+### Ajouté
+
+- `.dockerignore` — empêche `.env`, `.git/`, `__pycache__/`, `rapports/`,
+  `cache/` et `netaudit.db` d'être copiés dans l'image Docker. Corrige un
+  risque de fuite de `API_KEY` si un utilisateur avait un `.env` local au
+  moment du `docker build`.
+
+### Documentation
+
+- README : corrige « 335 tests » → « 339 tests » (en réalité **341** après
+  les tests de régression 2.6.2 ajoutés).
+
 ## [2.6.1] — 2026-04-25
 
 ### Modifié

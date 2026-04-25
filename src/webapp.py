@@ -1,9 +1,17 @@
+# `load_dotenv` DOIT être appelé avant tout import applicatif — scan.py et
+# history.py lisent des variables d'environnement (LOG_FILE_PATH, REPORT_DIR,
+# HISTORY_DB_PATH, NMAP_TIMEOUT, CACHE_SIZE) à l'import du module. Si
+# `load_dotenv()` arrive après ces imports, le `.env` est silencieusement
+# ignoré pour toutes ces variables — seul `API_KEY` (lu ici) serait honoré.
+# Régression identifiée en 2.6.2 : on le remet en première position.
+from dotenv import load_dotenv
+load_dotenv()
+
 import hmac
 import os
 import logging
 from functools import wraps
 
-from dotenv import load_dotenv
 from flask import Flask, jsonify, send_file, request, Response
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -21,9 +29,6 @@ from exports import render_pdf
 # statiques.
 setup_logging()
 init_db()
-
-# Charger le fichier .env s'il existe (sans écraser les variables déjà définies)
-load_dotenv()
 
 app = Flask(__name__)
 
