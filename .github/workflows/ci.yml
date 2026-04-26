@@ -32,10 +32,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run pytest
+      - name: Run pytest avec couverture
         env:
           PRIORITIZER_ENABLED: "0"  # Offline — pas d'appel réseau KEV/EPSS en CI
-        run: pytest tests/ -v --tb=short
+        run: pytest tests/ -v --tb=short --cov=src --cov-report=term --cov-report=xml --cov-fail-under=80
+
+      - name: Upload coverage XML
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          retention-days: 14
 
   docker:
     name: docker build

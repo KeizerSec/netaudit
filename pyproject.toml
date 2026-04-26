@@ -1,0 +1,32 @@
+# Configuration pytest + coverage. Pas de packaging — l'arborescence
+# `src/` est utilisée directement via `sys.path.insert` dans les tests.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "e2e: bout-en-bout (instancie SQLite + chaîne complète d'enrichissements)",
+]
+filterwarnings = [
+    # Flask-Limiter émet un DeprecationWarning sur le storage in-memory en
+    # mode test ; bruit non actionnable dans notre contexte.
+    "ignore::DeprecationWarning:flask_limiter",
+]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    # CLI bloc `if __name__ == "__main__":` de scan.py — non testé par
+    # design (couvert par le E2E indirectement, pas la peine de gonfler
+    # la métrique avec des prints).
+    "src/scan.py:333-364",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+show_missing = true
+skip_covered = false
