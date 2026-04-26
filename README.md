@@ -105,10 +105,11 @@ Les coefficients sont volontairement simples et explicables. Ils traduisent une 
 
 ```bash
 pip install -r requirements.txt
-PRIORITIZER_ENABLED=0 pytest tests/ -q
+PRIORITIZER_ENABLED=0 pytest tests/ -q                       # rapide
+PRIORITIZER_ENABLED=0 pytest tests/ --cov=src --cov-report=term  # avec couverture
 ```
 
-**341 tests**, hermétiques (aucun appel réseau), exécution < 1 s. CI GitHub Actions sur Python 3.11 + 3.12, `docker build` validé à chaque push.
+**343 tests unitaires** hermétiques (aucun appel réseau, exécution < 1 s) + **3 tests bout-en-bout** qui exercent la chaîne complète d'enrichissement (ATT&CK → priorisation → posture → baseline → SQLite → rapport HTML) avec le seul I/O Nmap mocké — détecte les régressions de wiring qu'aucun test unitaire ne couvre. **Couverture branch ≥ 80 %** vérifiée par la CI (`--cov-fail-under=80`, valeur courante 87 %). GitHub Actions sur Python 3.11 + 3.12, `docker build` validé à chaque push.
 
 ---
 
