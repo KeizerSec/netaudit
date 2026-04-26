@@ -24,6 +24,8 @@ from attack_mapper import (
     _KILL_CHAIN,
     _TACTIC_NARRATIVES,
     _SERVICE_MAPPING,
+    _CWE_MAPPING,
+    _KNOWN_CVES,
 )
 
 
@@ -55,54 +57,34 @@ def _make_scan(ports=None, host_up=True):
 # ─── Tests _map_service_techniques ───────────────────────────────────────────
 
 class TestMapServiceTechniques:
+    """Mapping service/port → techniques. Paramétré sur les services
+    couramment scannés ; les invariants structurels sont testés à part."""
 
-    def test_ssh_by_name(self):
-        techs = _map_service_techniques(22, "ssh")
-        ids = [t["id"] for t in techs]
-        assert "T1021.004" in ids
-        assert "T1133" in ids
-        assert "T1110" in ids
-
-    def test_http_by_name(self):
-        techs = _map_service_techniques(80, "http")
-        ids = [t["id"] for t in techs]
-        assert "T1190" in ids
-        assert "T1505.003" in ids
-
-    def test_smb_by_name(self):
-        techs = _map_service_techniques(445, "smb")
-        ids = [t["id"] for t in techs]
-        assert "T1021.002" in ids
-        assert "T1210" in ids
-
-    def test_rdp_by_port(self):
-        # rdp est dans service_mapping sous "rdp", port 3389
-        techs = _map_service_techniques(3389, "rdp")
-        ids = [t["id"] for t in techs]
-        assert "T1021.001" in ids
-        assert "T1133" in ids
-
-    def test_mysql_by_port(self):
-        techs = _map_service_techniques(3306, "mysql")
-        assert len(techs) > 0
+    @pytest.mark.parametrize("port,service,expected_ids", [
+        # Service reconnu par nom — chaque cas vérifie qu'au moins une
+        # technique typique du service est bien remontée par le mapping.
+        (22,   "ssh",   {"T1021.004", "T1133", "T1110"}),
+        (80,   "http",  {"T1190", "T1505.003"}),
+        (445,  "smb",   {"T1021.002", "T1210"}),
+        (3389, "rdp",   {"T1021.001", "T1133"}),
+        (3306, "mysql", {"T1190"}),
+    ])
+    def test_service_mappe_techniques_attendues(self, port, service, expected_ids):
+        techs = _map_service_techniques(port, service)
+        ids = {t["id"] for t in techs}
+        assert expected_ids <= ids, f"Manque : {expected_ids - ids}"
         assert all(t["confidence"] == "high" for t in techs)
 
     def test_unknown_service_and_port(self):
-        techs = _map_service_techniques(9999, "unknown-proto")
-        assert techs == []
+        assert _map_service_techniques(9999, "unknown-proto") == []
 
-    def test_source_contains_port_and_service(self):
+    def test_source_et_structure(self):
+        """La sortie contient les champs attendus et trace la cible."""
         techs = _map_service_techniques(22, "ssh")
+        assert techs, "ssh doit produire au moins une technique"
         for t in techs:
+            assert {"id", "confidence", "source"} <= t.keys()
             assert "22" in t["source"]
-
-    def test_all_results_are_dicts(self):
-        techs = _map_service_techniques(80, "http")
-        for t in techs:
-            assert isinstance(t, dict)
-            assert "id" in t
-            assert "confidence" in t
-            assert "source" in t
 
 
 # ─── Tests _map_cve_techniques ───────────────────────────────────────────────
@@ -190,83 +172,69 @@ class TestMapCveTechniques:
 # ─── Tests _map_cwe_techniques ────────────────────────────────────────────────
 
 class TestMapCweTechniques:
+    """CWE → techniques via cwe_mapping.json. Paramétré sur les CWEs
+    représentatives de chaque grande famille de faille."""
 
-    def test_sql_injection_cwe_maps_t1190(self):
-        techs = _map_cwe_techniques("CWE-89", "CVE-test")
-        ids = [t["id"] for t in techs]
-        assert "T1190" in ids
-
-    def test_os_command_injection_maps_t1059_and_t1190(self):
-        techs = _map_cwe_techniques("CWE-78", "CVE-test")
-        ids = [t["id"] for t in techs]
-        assert "T1059" in ids
-        assert "T1190" in ids
-
-    def test_deserialization_maps_t1190(self):
-        techs = _map_cwe_techniques("CWE-502", "CVE-test")
-        ids = [t["id"] for t in techs]
-        assert "T1190" in ids
-
-    def test_hardcoded_credentials_maps_t1078_and_t1552(self):
-        techs = _map_cwe_techniques("CWE-798", "CVE-test")
-        ids = [t["id"] for t in techs]
-        assert "T1078" in ids
-        assert "T1552" in ids
+    @pytest.mark.parametrize("cwe,expected_ids", [
+        ("CWE-89",  {"T1190"}),                    # SQL Injection
+        ("CWE-78",  {"T1059", "T1190"}),           # OS Command Injection
+        ("CWE-502", {"T1190"}),                    # Désérialisation non sûre
+        ("CWE-798", {"T1078", "T1552"}),           # Hard-coded credentials
+    ])
+    def test_cwe_mappe_techniques_attendues(self, cwe, expected_ids):
+        techs = _map_cwe_techniques(cwe, "CVE-test")
+        ids = {t["id"] for t in techs}
+        assert expected_ids <= ids, f"{cwe} manque : {expected_ids - ids}"
 
     def test_unknown_cwe_returns_empty(self):
         assert _map_cwe_techniques("CWE-99999", "CVE-test") == []
 
     def test_confidence_propagated_from_catalog(self):
-        # CWE-89 (SQLi) → T1190 en confiance haute
+        # CWE-89 (SQLi) → T1190 en confiance haute dans cwe_mapping.json
         techs = _map_cwe_techniques("CWE-89", "CVE-test")
         t1190 = next(t for t in techs if t["id"] == "T1190")
         assert t1190["confidence"] == "high"
 
     def test_source_transmise(self):
         techs = _map_cwe_techniques("CWE-89", "my-custom-source")
-        assert all(t["source"] == "my-custom-source" for t in techs)
+        assert techs and all(t["source"] == "my-custom-source" for t in techs)
 
 
 # ─── Tests _map_known_cve_techniques ──────────────────────────────────────────
 
 class TestMapKnownCveTechniques:
+    """CVE célèbre → CWE → techniques. Paramétré sur des CVEs canoniques de
+    chaque grande catégorie (RCE web, info-disclosure, command-injection,
+    buffer-overflow). Couvre le chaînage `known_cves → cwe_mapping`.
+    """
 
-    def test_log4shell_maps_via_cwe_502(self):
-        techs = _map_known_cve_techniques("CVE-2021-44228")
-        ids = [t["id"] for t in techs]
-        # CWE-502 → T1190 (high) + T1059 (medium)
-        assert "T1190" in ids
-
-    def test_heartbleed_maps_via_cwe_125(self):
-        techs = _map_known_cve_techniques("CVE-2014-0160")
-        ids = [t["id"] for t in techs]
-        # CWE-125 → T1082 (medium)
-        assert "T1082" in ids
-
-    def test_shellshock_maps_via_cwe_78(self):
-        techs = _map_known_cve_techniques("CVE-2014-6271")
-        ids = [t["id"] for t in techs]
-        assert "T1059" in ids
-        assert "T1190" in ids
-
-    def test_eternalblue_maps_via_cwe_119(self):
-        techs = _map_known_cve_techniques("CVE-2017-0144")
-        ids = [t["id"] for t in techs]
-        # CWE-119 → T1190 (high) + T1068 (medium)
-        assert "T1190" in ids
-        assert "T1068" in ids
+    @pytest.mark.parametrize("cve,expected_ids", [
+        # CVE-2021-44228 / Log4Shell → CWE-502 → T1190
+        ("CVE-2021-44228", {"T1190"}),
+        # CVE-2014-0160 / Heartbleed → CWE-125 → T1082
+        ("CVE-2014-0160",  {"T1082"}),
+        # CVE-2014-6271 / Shellshock → CWE-78 → T1059, T1190
+        ("CVE-2014-6271",  {"T1059", "T1190"}),
+        # CVE-2017-0144 / EternalBlue → CWE-119 → T1190, T1068
+        ("CVE-2017-0144",  {"T1190", "T1068"}),
+    ])
+    def test_known_cve_mappe_via_sa_cwe(self, cve, expected_ids):
+        techs = _map_known_cve_techniques(cve)
+        ids = {t["id"] for t in techs}
+        assert expected_ids <= ids, f"{cve} manque : {expected_ids - ids}"
 
     def test_unknown_cve_returns_empty(self):
         assert _map_known_cve_techniques("CVE-9999-99999") == []
 
     def test_case_insensitive_lookup(self):
-        # Le catalogue normalise en majuscules
-        techs = _map_known_cve_techniques("cve-2021-44228")
-        assert len(techs) > 0
+        # Le catalogue normalise en majuscules — accepte une saisie minuscule.
+        assert _map_known_cve_techniques("cve-2021-44228")
 
     def test_source_mentionne_le_nom_commun(self):
+        # Le nom commun ("Log4Shell") doit apparaître dans la `source` pour
+        # que le rapport soit lisible par un opérateur sans avoir à
+        # reconnaître l'identifiant CVE de mémoire.
         techs = _map_known_cve_techniques("CVE-2021-44228")
-        # "Log4Shell" doit figurer dans la source pour être lisible
         assert any("Log4Shell" in t["source"] for t in techs)
 
 
@@ -576,6 +544,43 @@ class TestServiceCatalogIntegrity:
                 if tid not in _TECHNIQUES:
                     missing.append(f"{svc} → {tid}")
         assert not missing, f"Références cassées : {missing}"
+
+
+class TestCweAndKnownCveCatalogIntegrity:
+    """Garde-fous sur cwe_mapping.json et known_cves.json — détecte les
+    références cassées et les annotations malformées entre les 3 catalogues."""
+
+    def test_cwe_mapping_references_techniques_existantes(self):
+        """Chaque technique référencée par une CWE doit exister dans techniques.json."""
+        missing = []
+        for cwe, info in _CWE_MAPPING.items():
+            for tref in info.get("techniques", []):
+                if tref["id"] not in _TECHNIQUES:
+                    missing.append(f"{cwe} → {tref['id']}")
+        assert not missing, f"Références cassées : {missing}"
+
+    def test_cwe_mapping_confidence_valide(self):
+        """`confidence` doit être l'un de {high, medium, low} pour permettre
+        à `_deduplicate_techniques` de classer correctement."""
+        valid = {"high", "medium", "low"}
+        bogus = []
+        for cwe, info in _CWE_MAPPING.items():
+            for tref in info.get("techniques", []):
+                conf = tref.get("confidence")
+                if conf not in valid:
+                    bogus.append(f"{cwe} → {tref.get('id')} : {conf!r}")
+        assert not bogus, f"Confidences invalides : {bogus}"
+
+    def test_known_cves_pointent_vers_cwe_existante(self):
+        """Une CVE annotée dans known_cves.json avec une `cwe` non vide doit
+        viser une CWE présente dans cwe_mapping.json — sinon l'enrichissement
+        s'effondre silencieusement sur l'heuristique CVSS sans signal."""
+        missing = []
+        for cve, info in _KNOWN_CVES.items():
+            cwe = (info.get("cwe") or "").strip()
+            if cwe and cwe not in _CWE_MAPPING:
+                missing.append(f"{cve} → {cwe}")
+        assert not missing, f"CVEs pointant sur une CWE absente : {missing}"
 
 
 class TestEnrichScanResult:
