@@ -17,8 +17,8 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 from scan import lancer_scan, valider_ip, REPORT_DIR, setup_logging
-from version import version_info
-from history import list_scans, scans_for_ip, init_db
+from version import version_info, __version__
+from history import list_scans, scans_for_ip, init_db, db_health
 from exports import render_pdf
 
 # Initialisations explicites au démarrage de l'application :
@@ -32,20 +32,39 @@ init_db()
 
 app = Flask(__name__)
 
-# Rate limiting global + par endpoint
+# Rate limiting global + par endpoint.
+#
+# Storage in-process par défaut (`memory://`) — adapté au déploiement single-host
+# du projet et zéro dépendance d'infra. En multi-instances ou multi-workers stricts,
+# régler `RATELIMIT_STORAGE_URI=redis://host:6379` (ou memcached://, etc.) pour
+# mutualiser les compteurs ; sinon chaque worker applique son quota localement.
 limiter = Limiter(
     key_func=get_remote_address,
     app=app,
     default_limits=["200/day", "60/hour"],
-    storage_uri="memory://",
+    storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
 )
 
-# Clé API — si vide, l'authentification est désactivée (mode dev)
+# Clé API — si vide, l'authentification est désactivée (mode dev).
+#
+# `REQUIRE_API_KEY=1` (ou `true`) impose la présence de la clé : si elle est
+# absente, le module refuse d'être importé. Cette variable est destinée aux
+# environnements de production où une `API_KEY` oubliée serait un incident
+# de sécurité — un `logging.warning` se perd dans les logs, un `SystemExit`
+# arrête le boot et garantit que le déploiement échoue visiblement.
 API_KEY: str = os.getenv("API_KEY", "")
+REQUIRE_API_KEY: bool = os.getenv("REQUIRE_API_KEY", "0").lower() in ("1", "true", "yes")
+
+if REQUIRE_API_KEY and not API_KEY:
+    raise SystemExit(
+        "REQUIRE_API_KEY=1 mais API_KEY est vide. Refus de démarrer pour "
+        "éviter d'exposer un endpoint /scan non authentifié en production."
+    )
+
 if not API_KEY:
     logging.warning(
         "API_KEY non définie — authentification désactivée. "
-        "Définissez API_KEY en production."
+        "Définissez API_KEY en production (ou REQUIRE_API_KEY=1 pour fail-fast)."
     )
 
 
@@ -70,15 +89,24 @@ def require_api_key(f):
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 
-@app.route("/scan/<ip>")
+@app.route("/scan", methods=["POST"])
 @require_api_key
 @limiter.limit("5/minute", exempt_when=lambda: app.testing)
-def scan(ip: str):
-    """
-    Lance un scan Nmap sur l'IP cible.
+def scan():
+    """Lance un scan Nmap sur l'IP fournie en payload JSON.
 
-    Headers requis (si API_KEY configurée) :
-        X-API-Key: <votre_clé>
+    Méthode `POST` plutôt que `GET` parce qu'un scan est une action lourde,
+    non-idempotente et avec effet de bord (record SQLite, génération de
+    rapport, appel réseau). Un `GET` serait préchargé par les bots, les
+    prefetchers de navigateur, les unfurls de messageries et les caches HTTP
+    intermédiaires — autant d'occasions de déclencher des scans involontaires.
+
+    Headers requis :
+        Content-Type: application/json
+        X-API-Key: <votre_clé>           (si API_KEY configurée)
+
+    Body :
+        {"ip": "192.168.1.1"}
 
     Réponse 200 :
         {
@@ -91,10 +119,19 @@ def scan(ip: str):
             "rapport_html": "/rapport/<ip>"
         }
     """
+    payload = request.get_json(silent=True) or {}
+    ip = (payload.get("ip") or "").strip()
+
+    if not ip:
+        return jsonify({
+            "error":  "Champ 'ip' requis dans le body JSON.",
+            "status": "failed",
+        }), 400
+
     if not valider_ip(ip):
         return jsonify({"error": "Adresse IP invalide.", "status": "failed"}), 400
 
-    data, chemin = lancer_scan(ip)
+    data, _ = lancer_scan(ip)
 
     if data is None:
         return jsonify({"error": "Scan non lancé.", "status": "failed"}), 500
@@ -173,8 +210,20 @@ def rapport(ip: str):
 
 @app.route("/health")
 def health():
-    """Endpoint de vérification — utilisé par les probes Docker / load balancer."""
-    return jsonify({"status": "ok"}), 200
+    """Endpoint de vérification — utilisé par les probes Docker / load balancer.
+
+    Retourne le statut applicatif et l'état de la persistance, pour que
+    l'opérateur distingue « le process répond » de « le process *et* la base
+    répondent ». L'endpoint reste 200 même si la DB est dégradée — c'est à
+    l'agrégateur (Prometheus, NewRelic, …) de définir une politique d'alerte
+    sur le champ `history_db`. Renvoyer 503 ici déclencherait des restarts en
+    boucle là où une simple alerte suffirait.
+    """
+    return jsonify({
+        "status":     "ok",
+        "history_db": "ok" if db_health() else "degraded",
+        "version":    __version__,
+    }), 200
 
 
 @app.route("/version")

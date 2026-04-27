@@ -145,3 +145,24 @@ class TestScansForIp:
         history_module.record_scan(_sample_scan("10.0.0.1"))
         scans = history_module.scans_for_ip("10.0.0.1")
         assert scans[0]["data"]["ports"][0]["service"] == "ssh"
+
+
+class TestDbHealth:
+    """db_health() — probe utilisé par /health (2.7.0)."""
+
+    def test_db_initialisee_repond_ok(self, history_module):
+        # Fixture appelle init_db → la base existe et répond au SELECT 1.
+        assert history_module.db_health() is True
+
+    def test_db_inaccessible_retourne_false_sans_lever(self, tmp_path, monkeypatch):
+        """Pointer DB_PATH sur un répertoire (pas un fichier) déclenche une
+        OSError côté sqlite3.connect — db_health doit dégrader proprement.
+        """
+        import importlib
+        # Crée un dossier que sqlite ne peut pas ouvrir comme une base.
+        bad = tmp_path / "not_a_file"
+        bad.mkdir()
+        monkeypatch.setenv("HISTORY_DB_PATH", str(bad))
+        import history
+        importlib.reload(history)
+        assert history.db_health() is False

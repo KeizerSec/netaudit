@@ -138,6 +138,25 @@ def list_scans(limit: int = 100) -> list[dict]:
         return []
 
 
+def db_health() -> bool:
+    """Probe rapide de la base : `SELECT 1` avec timeout court.
+
+    Utilisée par l'endpoint `/health` pour distinguer une instance saine d'une
+    instance dont la persistance est cassée (volume détaché, fichier corrompu,
+    permission perdue). Renvoie `True` si la base répond, `False` sinon —
+    aucune exception ne sort de cette fonction par construction.
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=1.0)
+        try:
+            conn.execute("SELECT 1").fetchone()
+            return True
+        finally:
+            conn.close()
+    except (sqlite3.Error, OSError):
+        return False
+
+
 def scans_for_ip(ip: str, limit: int = 50) -> list[dict]:
     """Retourne l'historique complet (data_json parsé) pour une IP donnée."""
     limit = max(1, min(int(limit), 200))
