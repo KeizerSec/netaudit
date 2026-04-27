@@ -112,7 +112,7 @@ def _touch_cache(name: str) -> None:
 
 def _http_get_json(url: str, timeout: int = HTTP_TIMEOUT) -> dict | None:
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "NetAudit/2.6.2"})
+        req = urllib.request.Request(url, headers={"User-Agent": "NetAudit/2.7.0"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError,
@@ -133,7 +133,7 @@ def _http_get_json_conditional(
     - 304 Not Modified → `(None, last_modified, 304)` (appelant garde son cache)
     - Échec / erreur → `(None, None, 0)`
     """
-    headers = {"User-Agent": "NetAudit/2.6.2"}
+    headers = {"User-Agent": "NetAudit/2.7.0"}
     if last_modified:
         headers["If-Modified-Since"] = last_modified
     try:

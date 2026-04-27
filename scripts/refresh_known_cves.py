@@ -45,7 +45,7 @@ TARGET = os.path.normpath(os.path.join(HERE, "..", "src", "data", "known_cves.js
 
 def fetch_kev(timeout: int = 10) -> dict:
     """Télécharge le catalogue KEV. Retourne le JSON parsé ou lève."""
-    req = urllib.request.Request(KEV_URL, headers={"User-Agent": "NetAudit-refresh/2.6"})
+    req = urllib.request.Request(KEV_URL, headers={"User-Agent": "NetAudit-refresh/2.7"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
 

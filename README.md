@@ -24,8 +24,10 @@ docker build -t netaudit .
 docker run -p 5000:5000 netaudit
 
 # Dans un autre terminal
-curl http://localhost:5000/scan/192.168.1.1
-open  http://localhost:5000/rapport/192.168.1.1
+curl -X POST http://localhost:5000/scan \
+     -H "Content-Type: application/json" \
+     -d '{"ip": "192.168.1.1"}'
+open http://localhost:5000/rapport/192.168.1.1
 ```
 
 Trois formats en sortie : **HTML** interactif, **JSON** pour les pipelines, **PDF A4** pour l'audit.
@@ -50,12 +52,12 @@ Le tout **offline-safe** : un échec réseau dégrade sur cache ou CVSS seul, ja
 
 | Méthode | Endpoint | Description | Auth |
 |---|---|---|---|
-| GET | `/scan/<ip>` | Lance un scan | oui (5/min) |
+| POST | `/scan` | Lance un scan, body JSON `{"ip": "..."}` | oui (5/min) |
 | GET | `/rapport/<ip>` | HTML — `?format=json\|pdf` | oui |
 | GET | `/history` · `/history/<ip>` | Historique persistant | oui |
-| GET | `/version` · `/health` | Métadonnées build / probe | non |
+| GET | `/version` · `/health` | Métadonnées build + probe DB | non |
 
-Auth par header `X-API-Key` (comparaison à temps constant). Rate limit Flask-Limiter. Path-traversal checké sur `/rapport/<ip>`.
+Auth par header `X-API-Key` (comparaison à temps constant). En production, `REQUIRE_API_KEY=1` empêche le boot si la clé est vide. Rate limit Flask-Limiter (storage configurable via `RATELIMIT_STORAGE_URI`). Path-traversal checké sur `/rapport/<ip>`. `/health` expose `history_db: ok|degraded` pour l'observabilité.
 
 ---
 
@@ -68,6 +70,8 @@ cp .env.example .env   # ajuster ensuite
 | Variable | Défaut | Rôle |
 |---|---|---|
 | `API_KEY` | *(vide)* | Auth ; vide = mode dev sans auth |
+| `REQUIRE_API_KEY` | `0` | `1` = refuse de démarrer si `API_KEY` vide (prod) |
+| `RATELIMIT_STORAGE_URI` | `memory://` | Backend rate limit (`redis://…` en multi-instances) |
 | `NMAP_TIMEOUT` | `300` | Timeout Nmap (secondes) |
 | `CACHE_DIR` | `./cache` | Cache KEV/EPSS, TTL 24 h |
 | `HISTORY_DB_PATH` | `./netaudit.db` | SQLite historique |

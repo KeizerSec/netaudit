@@ -5,6 +5,40 @@ Toutes les évolutions notables du projet sont listées ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versions alignées sur [SemVer](https://semver.org/).
 
+## [2.7.0] — 2026-04-27
+
+Réponses aux 4 points de l'audit externe (Codex, 2026-04-26) qui touchent
+au contrat API, à la mutualisation du rate limit et aux garde-fous de
+configuration sécurité.
+
+### Modifié — BREAKING
+
+- **`POST /scan` remplace `GET /scan/<ip>`.** Un scan déclenche une action
+  lourde non-idempotente (record SQLite, génération de rapport, appel
+  réseau) ; un `GET` était préchargé par les bots, prefetchers de
+  navigateur, unfurls de messageries et caches HTTP intermédiaires —
+  autant de risques de scans involontaires. Le payload est désormais
+  `{"ip": "..."}` en JSON, headers inchangés (`X-API-Key`).
+
+### Ajouté
+
+- **`REQUIRE_API_KEY=1`** — refuse de démarrer si `API_KEY` est vide.
+  Destiné aux environnements de production : un `logging.warning` se
+  perdrait dans les logs, un `SystemExit` arrête le boot et garantit que
+  le déploiement échoue visiblement. Mode dev par défaut inchangé.
+- **`/health` enrichi** — expose désormais `history_db: ok|degraded` et
+  `version` en plus de `status: ok`. La probe DB est un `SELECT 1` avec
+  timeout 1 s, sans exception en surface (`history.db_health()`).
+  L'endpoint reste 200 même si la DB est dégradée — c'est à l'agrégateur
+  (Prometheus, etc.) de définir une politique d'alerte sur ce champ ;
+  renvoyer 503 ici déclencherait des restarts en boucle.
+- **`RATELIMIT_STORAGE_URI`** — backend du rate limiter configurable.
+  Défaut `memory://` (in-process, adapté au single-host) ; régler sur
+  `redis://...` ou `memcached://...` en multi-instances stricts.
+- Tests de régression dédiés : `TestRequireApiKey` (sous-process, 3 cas),
+  `TestDbHealth` (probe OK / probe KO sans lever), `TestHealth` couvre
+  les nouveaux champs `history_db` et `version`.
+
 ## [2.6.2] — 2026-04-25
 
 ### Corrigé
